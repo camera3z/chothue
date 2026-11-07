@@ -69,3 +69,9 @@ Nếu Chromium hệ thống đã có sẵn: `CHROMIUM_PATH=/usr/bin/chromium npm
 Giao diện hiện tại dựa trên mẫu `rentbook_1.html` người dùng cung cấp: bảng màu xanh ngọc, bố cục sáng gọn, menu trái trên desktop và điều hướng dưới trên mobile. Có chế độ sáng/tối (ghi nhớ trong trình duyệt), danh sách đơn thuê dạng hàng, tài sản dạng thẻ với bộ lọc danh mục, lịch thanh theo từng tài sản trong 14 ngày và tổng quan thu tiền sáu tháng. Biểu đồ chỉ lấy giao dịch `rent` có ngày trong `transactions`; không coi tiền cọc là doanh thu và không tự suy diễn ngày thu của dữ liệu cũ.
 
 Chỉ áp dụng giao diện và các thao tác tương thích với mô hình dữ liệu hiện tại. Không nhập dữ liệu mẫu, mã JavaScript demo hoặc cơ chế workspace local của file mẫu vào Supabase. Các khả năng nâng cao trong mẫu như đặt chỗ tương lai theo giờ, trường động theo loại hình và hủy đơn chưa được triển khai. Chế độ Supabase và cấp key giữ nguyên, không cần chạy lại schema.
+
+## Tài khoản ở góc phải
+
+Khi chưa đăng nhập, nút Đăng nhập trên đầu trang đưa focus vào form. Sau đăng nhập, góc phải hiển thị tên shop và Đăng xuất trên cả desktop/mobile. Bấm tên shop để đổi tên hiển thị của tài khoản; giá trị lưu trong Supabase Auth user metadata `shop_name`, chỉ dùng làm nhãn giao diện, không dùng để phân quyền. Khi chưa đặt tên, hiển thị tên organization hiện có. Không cần migration SQL. Đăng xuất xóa trạng thái tài khoản/workspace đang hiển thị và quay lại form.
+
+Kiểm tra giao diện tài khoản: chạy server với cấu hình Supabase ở cổng 5173 rồi `CHROMIUM_PATH=/usr/bin/chromium node tests/account-smoke.mjs`. Bài kiểm tra giả lập API Supabase, không tạo/sửa tài khoản thật và không chứng minh dịch vụ Auth thật hoạt động.

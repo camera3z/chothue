@@ -1505,3 +1505,80 @@ th {
     transition: none !important;
   }
 }
+.account-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-height: 36px;
+  margin-bottom: 14px;
+}
+.account-header a {
+  text-decoration: none;
+  color: var(--accent);
+}
+.shop-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--ink);
+  min-width: 0;
+  max-width: 290px;
+  text-align: left;
+}
+.shop-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+}
+.shop-label {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.auth-page-header {
+  max-width: 1240px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 18px auto;
+}
+.auth-page-header .account-header {
+  margin: 0;
+}
+.auth-page-header + .auth {
+  margin-top: 5vh;
+}
+@media (max-width: 879px) {
+  .account-header {
+    margin-bottom: 14px;
+    gap: 8px;
+  }
+  .shop-name {
+    max-width: calc(100vw - 150px);
+  }
+  .shop-label {
+    font-size: 12px;
+  }
+  .account-header .btn {
+    white-space: nowrap;
+  }
+  .auth-page-header {
+    margin-top: 15px;
+  }
+  .auth-page-header + .auth {
+    margin-top: 20px;
+  }
+}

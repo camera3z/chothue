@@ -371,6 +371,52 @@ function navHTML() {
     )
     .join("");
 }
+const shopName = () =>
+  session?.user?.user_metadata?.shop_name ||
+  org?.name ||
+  state?.shopName ||
+  "Không gian demo";
+function accountHeader() {
+  return `<div class="account-header" aria-label="Tài khoản">${session ? `<button class="shop-name" data-shop-name title="Đổi tên shop"><span class="shop-avatar">${esc(shopName().trim().slice(0, 1).toUpperCase())}</span><span class="shop-label">${esc(shopName())}</span></button><button class="btn sm" data-signout>Đăng xuất</button>` : `<a class="btn sm" href="#auth-form" data-login>Đăng nhập</a>`}</div>`;
+}
+function openShopName() {
+  modal(
+    "Tên shop",
+    `${input("Tên shop hiển thị", "name", "text", `maxlength="120" value="${esc(shopName())}"`)}<p class="footnote">Tên hiển thị cho tài khoản của bạn trên Rentbook.</p>`,
+    async (d) => {
+      const name = d.name.trim();
+      if (!name || name.length > 120)
+        throw Error("Nhập tên shop từ 1 đến 120 ký tự.");
+      if (db) {
+        const { data, error } = await db.auth.updateUser({
+          data: { shop_name: name },
+        });
+        if (error) throw error;
+        session = { ...session, user: data.user };
+        render();
+      } else {
+        await save({ ...state, shopName: name });
+      }
+    },
+  );
+}
+async function signOut(button) {
+  button.disabled = true;
+  try {
+    const { error } = await db.auth.signOut();
+    if (error) throw error;
+    session = null;
+    org = null;
+    license = null;
+    state = { assets: [], customers: [], contracts: [] };
+    view = "overview";
+    search = "";
+    render();
+  } catch (e) {
+    button.disabled = false;
+    toast("Chưa đăng xuất được: " + e.message);
+  }
+}
 function render() {
   if (db && !session) {
     renderAuth();
@@ -378,7 +424,7 @@ function render() {
   }
   const title = nav.find((x) => x[0] === view)[2];
   document.querySelector("#app").innerHTML =
-    `<div class="shell"><aside class="side"><div><a class="brand" href="#"><i></i>Rentbook</a><div class="wsname" style="max-width:none;margin-top:6px">${esc(org?.name || "Không gian demo")}</div></div><nav class="snav" aria-label="Điều hướng">${navHTML()}</nav><div class="side-bottom"><button class="theme-btn btn sm" data-theme-toggle>Đổi sáng / tối</button><button class="btn sm" id="profile">${db ? "Đăng xuất" : "Bản trải nghiệm"}</button><small>${db ? "Dữ liệu đồng bộ trong không gian riêng của bạn." : "Bản demo. Dữ liệu lưu trong trình duyệt này."}</small></div></aside><div class="content-column"><div class="top"><div class="brand"><i></i>Rentbook</div><div class="wsname">${esc(org?.name || "Không gian demo")}</div><button class="btn sm" data-theme-toggle aria-label="Đổi giao diện sáng tối">◐</button><button class="btn sm mobile-signout" id="mobile-profile">${db ? "Đăng xuất" : "Demo"}</button></div><main class="main"><div class="head page-title"><div><h1>${view === "overview" ? "Hôm nay" : title}</h1><p>${view === "overview" ? new Date().toLocaleDateString("vi-VN", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : view === "calendar" ? "Theo dõi ngày giao và hẹn trả của từng đơn thuê." : view === "assets" ? `${state.assets.length} tài sản · Danh mục theo ngành kinh doanh` : view === "customers" ? `${state.customers.length} khách hàng` : "Theo dõi đầy đủ tài sản, tiền thuê và tiền cọc."}</p></div>${["overview", "assets", "customers", "contracts"].includes(view) ? `<button class="btn pri primary" data-add="${{ overview: "contract", assets: "asset", customers: "customer", contracts: "contract" }[view]}">＋ ${view === "assets" ? "Thêm tài sản" : view === "customers" ? "Thêm khách thuê" : "Tạo đơn thuê"}</button>` : ""}</div>${!db ? '<div class="demo-banner">Bản demo · Dữ liệu lưu trên trình duyệt này.</div>' : ""}${["assets", "customers", "contracts"].includes(view) ? `<div class="filters search-bar"><input id="search" class="search" type="search" placeholder="Tìm kiếm theo tên${view === "contracts" ? " hoặc mã đơn" : ""}…" value="${esc(search)}"></div>` : ""}<div id="content">${content()}</div><footer>Rentbook · Quản lý cho thuê đa ngành</footer></main></div></div><nav class="tabs" aria-label="Điều hướng di động">${navHTML()}</nav><dialog id="modal"></dialog><div id="toast" role="status"></div>`;
+    `<div class="shell"><aside class="side"><div><a class="brand" href="#"><i></i>Rentbook</a><div class="wsname" style="max-width:none;margin-top:6px">${esc(shopName())}</div></div><nav class="snav" aria-label="Điều hướng">${navHTML()}</nav><div class="side-bottom"><button class="theme-btn btn sm" data-theme-toggle>Đổi sáng / tối</button><small>${db ? "Dữ liệu đồng bộ trong không gian riêng của bạn." : "Bản demo. Dữ liệu lưu trong trình duyệt này."}</small></div></aside><div class="content-column"><div class="top"><div class="brand"><i></i>Rentbook</div><div class="wsname">${esc(shopName())}</div><button class="btn sm" data-theme-toggle aria-label="Đổi giao diện sáng tối">◐</button></div><main class="main">${accountHeader()}<div class="head page-title"><div><h1>${view === "overview" ? "Hôm nay" : title}</h1><p>${view === "overview" ? new Date().toLocaleDateString("vi-VN", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : view === "calendar" ? "Theo dõi ngày giao và hẹn trả của từng đơn thuê." : view === "assets" ? `${state.assets.length} tài sản · Danh mục theo ngành kinh doanh` : view === "customers" ? `${state.customers.length} khách hàng` : "Theo dõi đầy đủ tài sản, tiền thuê và tiền cọc."}</p></div>${["overview", "assets", "customers", "contracts"].includes(view) ? `<button class="btn pri primary" data-add="${{ overview: "contract", assets: "asset", customers: "customer", contracts: "contract" }[view]}">＋ ${view === "assets" ? "Thêm tài sản" : view === "customers" ? "Thêm khách thuê" : "Tạo đơn thuê"}</button>` : ""}</div>${!db ? '<div class="demo-banner">Bản demo · Dữ liệu lưu trên trình duyệt này.</div>' : ""}${["assets", "customers", "contracts"].includes(view) ? `<div class="filters search-bar"><input id="search" class="search" type="search" placeholder="Tìm kiếm theo tên${view === "contracts" ? " hoặc mã đơn" : ""}…" value="${esc(search)}"></div>` : ""}<div id="content">${content()}</div><footer>Rentbook · Quản lý cho thuê đa ngành</footer></main></div></div><nav class="tabs" aria-label="Điều hướng di động">${navHTML()}</nav><dialog id="modal"></dialog><div id="toast" role="status"></div>`;
   bind();
 }
 function bind() {
@@ -398,6 +444,14 @@ function bind() {
           document.documentElement.dataset.theme,
         );
       } catch {}
+      return;
+    }
+    if (b.hasAttribute("data-shop-name")) {
+      openShopName();
+      return;
+    }
+    if (b.hasAttribute("data-signout") && db) {
+      await signOut(b);
       return;
     }
     if (d.category) {
@@ -433,8 +487,7 @@ function bind() {
       dt.setDate(dt.getDate() + calendarOffset);
       calendarDay = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
       render();
-    } else if ((b.id === "profile" || b.id === "mobile-profile") && db)
-      await db.auth.signOut();
+    }
   };
   document.querySelector("#search")?.addEventListener("input", (e) => {
     search = e.target.value;
@@ -677,7 +730,11 @@ function openDetail(id) {
 }
 function renderAuth() {
   document.querySelector("#app").innerHTML =
-    `<div class="auth"><div class="auth-story"><div class="brand"><i></i>Rentbook</div><span class="eyebrow">HỆ ĐIỀU HÀNH CHO THUÊ ĐA NGÀNH</span><h2>Tài sản luôn luân chuyển.<br>Vận hành luôn trong tầm tay.</h2><p>Từ lần bàn giao đầu tiên đến lần nhận trả cuối cùng.</p><div class="auth-flow"><span>01 / QUẢN LÝ KHO</span><span>02 / GIAO & NHẬN TRẢ</span><span>03 / TIỀN THUÊ & TIỀN CỌC</span></div></div><section class="panel"><span class="eyebrow">KHÔNG GIAN KINH DOANH CỦA BẠN</span><h1>Đăng nhập bàn điều hành.</h1><p>Không gian riêng cho đơn vị kinh doanh cho thuê của bạn.</p><form id="auth-form">${input("Email", "email", "email")}${input("Mật khẩu", "password", "password", 'minlength="8"')}<p id="auth-message" role="status"></p><button class="primary" name="action" value="signin">Đăng nhập</button><button name="action" value="signup">Tạo tài khoản</button></form></section></div>`;
+    `<div class="auth-page-header"><a class="brand" href="#"><i></i>Rentbook</a>${accountHeader()}</div><div class="auth"><div class="auth-story"><div class="brand"><i></i>Rentbook</div><span class="eyebrow">HỆ ĐIỀU HÀNH CHO THUÊ ĐA NGÀNH</span><h2>Tài sản luôn luân chuyển.<br>Vận hành luôn trong tầm tay.</h2><p>Từ lần bàn giao đầu tiên đến lần nhận trả cuối cùng.</p><div class="auth-flow"><span>01 / QUẢN LÝ KHO</span><span>02 / GIAO & NHẬN TRẢ</span><span>03 / TIỀN THUÊ & TIỀN CỌC</span></div></div><section class="panel"><span class="eyebrow">KHÔNG GIAN KINH DOANH CỦA BẠN</span><h1>Đăng nhập bàn điều hành.</h1><p>Không gian riêng cho đơn vị kinh doanh cho thuê của bạn.</p><form id="auth-form">${input("Email", "email", "email")}${input("Mật khẩu", "password", "password", 'minlength="8"')}<p id="auth-message" role="status"></p><button class="primary" name="action" value="signin">Đăng nhập</button><button name="action" value="signup">Tạo tài khoản</button></form></section></div>`;
+  document.querySelector("[data-login]")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    document.querySelector("#auth-form [name=email]").focus();
+  });
   document.querySelector("form").onsubmit = async (e) => {
     e.preventDefault();
     const d = Object.fromEntries(new FormData(e.target));
