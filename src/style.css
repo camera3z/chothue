@@ -1004,7 +1004,8 @@ body {
   min-height: 34px;
   font-weight: 500;
 }
-.primary {
+.primary,
+.modal-actions .primary {
   background: var(--accent);
   color: var(--accent-ink);
   border-color: var(--accent);

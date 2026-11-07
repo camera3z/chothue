@@ -106,6 +106,17 @@ try {
     .waitFor();
   await page.locator("[data-shop-name]").click();
   await page.locator("#modal [name=name]").fill("Shop mới <an toàn>");
+  for (const theme of ['light','dark']) {
+    await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
+    const styles=await page.locator('#modal .modal-actions').evaluate(el=>{
+      const primary=getComputedStyle(el.querySelector('.primary'));
+      const cancel=getComputedStyle(el.querySelector('#cancel'));
+      return {background:primary.backgroundColor,color:primary.color,cancel:cancel.backgroundColor};
+    });
+    assert.notEqual(styles.background,styles.cancel,'Save button must use accent background in '+theme);
+    assert.notEqual(styles.background,styles.color,'Save text must be visible in '+theme);
+  }
+
   await page
     .getByRole("button", { name: "Lưu thông tin", exact: true })
     .click();
