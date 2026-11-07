@@ -1575,6 +1575,14 @@ th {
   .account-header .btn {
     white-space: nowrap;
   }
+  .account-header [data-signout] {
+    flex: none;
+    width: auto;
+    min-height: 28px;
+    padding: 4px 8px;
+    font-size: 11px;
+    line-height: 18px;
+  }
   .auth-page-header {
     margin-top: 15px;
   }
