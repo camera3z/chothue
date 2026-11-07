@@ -31,6 +31,7 @@ const dateLabel = (d) => (d ? d.split("-").reverse().join("/") : "");
 const overdue = (c) => active(c) && c.end < today();
 const held = (c) =>
   Math.max(0, Number(c.deposit || 0) - Number(c.depositRefunded || 0));
+let assetFilter = "all";
 let calendarOffset = 0,
   calendarDay = today(),
   contractFilter = "all";
@@ -99,11 +100,11 @@ try {
   state = structuredClone(seed);
 }
 const nav = [
-  ["overview", "◫", "Bàn điều hành"],
-  ["calendar", "▦", "Lịch giao · trả"],
-  ["assets", "▣", "Kho cho thuê"],
+  ["overview", "◫", "Tổng quan"],
+  ["calendar", "▦", "Lịch"],
+  ["assets", "▣", "Tài sản"],
   ["customers", "♙", "Khách thuê"],
-  ["contracts", "▤", "Hợp đồng"],
+  ["contracts", "▤", "Đơn thuê"],
   ["payments", "↗", "Công nợ & tiền cọc"],
   ["license", "◇", "Gói & bản quyền"],
 ];
@@ -143,39 +144,97 @@ function contractRows(list) {
       `<tr><td><strong>${esc(c.code)}</strong><small>${esc(customerName(c.customerId))}</small></td><td>${esc(assetName(c.assetId))}<small>${c.quantity} đơn vị</small></td><td>${dateLabel(c.start)}<small>Hẹn trả ${dateLabel(c.end)}</small></td><td>${money(c.total)}<small>Còn thu ${money(Math.max(0, c.total - c.paid))}</small></td><td><span class="badge ${overdue(c) ? "danger" : active(c) ? "blue" : ""}">${overdue(c) ? "Quá hạn" : active(c) ? "Đang thuê" : "Đã trả"}</span></td><td class="row-actions"><button class="text-btn" data-detail="${c.id}">Chi tiết</button>${active(c) ? `<button class="text-btn" data-return="${c.id}">Nhận trả</button>` : ""}</td></tr>`,
   );
 }
+function revenueData() {
+  const months = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - 5 + i);
+    return {
+      key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+      label: `T${d.getMonth() + 1}`,
+      value: 0,
+    };
+  });
+  const categories = {};
+  for (const c of state.contracts) {
+    const category =
+      state.assets.find((a) => a.id === c.assetId)?.category || "Khác";
+    for (const t of c.transactions || []) {
+      if (t.type !== "rent") continue;
+      const d = new Date(t.at);
+      if (Number.isNaN(d.getTime())) continue;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const m = months.find((m) => m.key === key);
+      if (m) {
+        m.value += Number(t.amount);
+        categories[category] = (categories[category] || 0) + Number(t.amount);
+      }
+    }
+  }
+  return { months, categories };
+}
+function revenueChart(months) {
+  const max = Math.max(1, ...months.map((m) => m.value));
+  return `<div class="revenue-chart" role="img" aria-label="Tiền thuê đã thu trong sáu tháng: ${months.map((m) => m.label + ": " + money(m.value)).join("; ")}">${months.map((m, i) => `<div class="chart-column"><span class="chart-value">${m.value ? money(m.value) : "0"}</span><div class="chart-track"><i class="${i === 5 ? "current" : ""}" style="height:${m.value ? Math.max(2, (m.value / max) * 100) : 0}%"></i></div><small>${m.label}</small></div>`).join("")}</div>`;
+}
 function overview() {
   const renting = state.contracts.filter(active),
     late = renting.filter(overdue),
     due = renting.filter((c) => c.end === today()),
-    total = state.assets.reduce((n, a) => n + Number(a.quantity), 0),
+    total = state.assets.reduce(
+      (n, a) => n + Number(a.quantity) - Number(a.maintenance || 0),
+      0,
+    ),
     out = renting.reduce((n, c) => n + Number(c.quantity), 0),
-    repair = state.assets.reduce((n, a) => n + Number(a.maintenance || 0), 0),
     debt = state.contracts.reduce(
       (n, c) => n + Math.max(0, c.total - c.paid),
       0,
     );
-  return `<div class="operation-strip"><div><span class="live-dot"></span> HOẠT ĐỘNG HÔM NAY <strong>${dateLabel(today())}</strong></div><button class="text-btn" data-view="calendar">Mở lịch giao · trả ↗</button></div><div class="stats">${[
-    ["Đang cho thuê", out, "đơn vị / " + renting.length + " hợp đồng", "blue"],
-    ["Hẹn trả hôm nay", due.length, "hợp đồng cần thu hồi", "orange"],
-    ["Hợp đồng quá hạn", late.length, "cần liên hệ khách thuê", "danger"],
-    ["Còn phải thu", money(debt), "Không bao gồm tiền cọc", ""],
+  const { months, categories } = revenueData();
+  const max = Math.max(1, ...Object.values(categories));
+  return `<div class="kpis">${[
+    ["Đang cho thuê", renting.length, "đơn"],
+    ["Trả hôm nay", due.length, "đơn"],
+    ["Quá hạn", late.length, "đơn"],
+    [
+      "Công suất hiện tại",
+      `${total ? Math.round((out / total) * 100) : 0}%`,
+      `${out}/${total} đơn vị`,
+    ],
+    [
+      "Tiền thuê thu tháng này",
+      money(months[5].value),
+      `Còn phải thu ${money(debt)}`,
+    ],
   ]
     .map(
-      ([label, n, sub, tone]) =>
-        `<article class="stat ${tone}"><p>${label}</p><b>${n}</b><small>${sub}</small></article>`,
+      ([label, value, sub], i) =>
+        `<div class="kpi ${i === 2 && late.length ? "alert" : ""}"><span>${label}</span><b class="${i === 4 ? "money-kpi" : ""}">${value}</b><em>${sub}</em></div>`,
     )
     .join(
       "",
-    )}</div><div class="dispatch-grid"><section class="panel"><div class="panel-title"><div><span class="eyebrow">ƯU TIÊN XỬ LÝ</span><h3>Thu hồi & bàn giao</h3></div><span class="count">${late.length + due.length}</span></div>${late.length + due.length ? [...late, ...due].map((c) => `<div class="dispatch-item"><div class="dispatch-icon ${overdue(c) ? "danger" : "orange"}">↙</div><div><strong>${esc(assetName(c.assetId))}</strong><p>${esc(customerName(c.customerId))} · ${c.quantity} đơn vị</p><small>${esc(c.code)} · ${overdue(c) ? "Quá hạn từ" : "Hẹn trả"} ${dateLabel(c.end)}</small></div><button class="outline" data-return="${c.id}">Nhận trả</button></div>`).join("") : '<div class="empty-state"><span>✓</span><h3>Chưa có lịch thu hồi cần xử lý</h3><p>Các hợp đồng đến hạn và quá hạn sẽ hiển thị tại đây.</p></div>'}</section><section class="panel fleet"><span class="eyebrow">TÌNH TRẠNG KHO</span><h3>Tài sản đang ở đâu?</h3><div class="fleet-number">${Math.max(0, total - out - repair)}<small> sẵn sàng cho thuê</small></div><div class="stock-bar"><span style="width:${total ? (out / total) * 100 : 0}%"></span><i style="width:${total ? (repair / total) * 100 : 0}%"></i></div><div class="legend"><p><i class="dot blue"></i> Đang thuê <b>${out}</b></p><p><i class="dot orange"></i> Bảo trì <b>${repair}</b></p><p><i class="dot"></i> Tổng trong kho <b>${total}</b></p></div><button class="outline" data-view="assets">Quản lý kho →</button></section></div><section class="panel"><div class="panel-title"><div><span class="eyebrow">THEO DÕI VÒNG ĐỜI THUÊ</span><h3>Hợp đồng gần đây</h3></div><button class="text-btn" data-view="contracts">Tất cả hợp đồng →</button></div>${table(["Hợp đồng / Khách thuê", "Tài sản", "Giao · Hẹn trả", "Tiền thuê", "Trạng thái", "Thao tác"], contractRows(state.contracts.slice().reverse().slice(0, 6)))}</section><div class="quick-actions"><button data-add="asset">＋ Nhập tài sản vào kho</button><button data-add="customer">＋ Thêm khách thuê</button><button data-add="contract">＋ Lập hợp đồng cho thuê</button></div>`;
+    )}</div><div class="cols"><section class="card"><h2>Việc cần xử lý</h2><div class="list">${[...late, ...due].length ? [...late, ...due].map((c) => `<div class="row"><span><span class="r-top"><span class="pill ${overdue(c) ? "st-late" : "st-out"}">${overdue(c) ? "Quá hạn" : "Hẹn trả hôm nay"}</span><b>${esc(customerName(c.customerId))}</b></span><span class="r-sub">${esc(assetName(c.assetId))} × ${c.quantity} · <button class="btn sm" data-detail="${c.id}">${esc(c.code)}</button></span><span class="r-sub">${overdue(c) ? "Quá hạn từ" : "Hẹn trả"} ${dateLabel(c.end)}</span></span><span class="r-end"><button class="btn sm pri" data-return="${c.id}">Nhận trả</button></span></div>`).join("") : '<div class="empty"><b>Hôm nay không có việc tồn đọng</b>Không có đơn quá hạn hoặc hẹn trả trong ngày.</div>'}</div></section><div class="stack"><section class="card"><h2>Tiền thuê đã thu · 6 tháng</h2>${revenueChart(months)}<p class="footnote">Theo nhật ký thu tiền, không bao gồm tiền cọc. Khoản thu cũ chưa có ngày ghi nhận không được đưa vào biểu đồ.</p></section><section class="card"><h2>Thu tiền theo loại hình · 6 tháng</h2>${
+    Object.keys(categories).length
+      ? Object.entries(categories)
+          .sort((a, b) => b[1] - a[1])
+          .map(
+            ([name, value]) =>
+              `<div class="tbar"><span>${esc(name)}</span><span class="tr"><i style="width:${(value / max) * 100}%"></i></span><b class="amt">${money(value)}</b></div>`,
+          )
+          .join("")
+      : '<div class="muted">Chưa có giao dịch thu tiền thuê.</div>'
+  }</section></div></div>`;
 }
 function calendar() {
   const base = new Date(today() + "T12:00:00");
   base.setDate(base.getDate() + calendarOffset);
-  const days = Array.from({ length: 7 }, (_, i) => {
+  const days = Array.from({ length: 14 }, (_, i) => {
     const d = new Date(base);
     d.setDate(d.getDate() + i);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   });
+  const start = days[0],
+    end = days[13];
   const events = state.contracts.flatMap((c) => [
     { c, date: c.start, type: "Giao tài sản" },
     {
@@ -185,42 +244,70 @@ function calendar() {
     },
   ]);
   const selected = events.filter((e) => e.date === calendarDay);
-  return `<section class="panel"><div class="panel-title"><div><span class="eyebrow">LỊCH VẬN HÀNH</span><h3>${dateLabel(days[0])} — ${dateLabel(days[6])}</h3></div><div class="row-actions"><button data-week="-7" aria-label="Tuần trước">←</button><button data-week="0">Hôm nay</button><button data-week="7" aria-label="Tuần sau">→</button></div></div><div class="week-grid">${days.map((d) => `<button data-day="${d}" class="day ${d === calendarDay ? "chosen" : ""}"><small>${new Date(d + "T12:00:00").toLocaleDateString("vi-VN", { weekday: "short" })}</small><b>${d.slice(8)}</b><span>${events.filter((e) => e.date === d).length} lịch</span></button>`).join("")}</div><h3 class="schedule-title">Lịch ngày ${dateLabel(calendarDay)}</h3>${selected.length ? selected.map(({ c, type }) => `<div class="dispatch-item"><span class="dispatch-icon">${type === "Giao tài sản" ? "↗" : "↙"}</span><div><strong>${type} · ${esc(assetName(c.assetId))}</strong><p>${esc(customerName(c.customerId))} · ${esc(c.code)} · ${c.quantity} đơn vị</p></div><button class="text-btn" data-detail="${c.id}">Chi tiết →</button></div>`).join("") : '<div class="empty-state"><span>▦</span><h3>Không có lịch trong ngày này</h3><p>Lịch được lấy từ ngày giao và ngày hẹn trả trên hợp đồng.</p></div>'}<p class="footnote">Lịch theo ngày. Hợp đồng giữ số lượng kho ngay khi tạo cho đến lúc nhận trả; chưa hỗ trợ đặt chỗ theo khung giờ.</p></section>`;
+  const dayIndex = (d) =>
+    Math.round(
+      (new Date(d + "T12:00:00") - new Date(start + "T12:00:00")) / 86400000,
+    );
+  return `<section><div class="panel-title"><div class="cal-range">${dateLabel(start)} — ${dateLabel(end)}</div><div class="row-actions"><button class="btn sm" data-week="-14" aria-label="Tuần trước">←</button><button class="btn sm" data-week="0">Hôm nay</button><button class="btn sm" data-week="14" aria-label="Tuần sau">→</button></div></div><div class="cal" style="--cw:48px"><div class="cgrid"><div class="chead"><div class="clabel">Tài sản</div><div class="cdays">${days.map((d) => `<div class="cd ${d === today() ? "today" : ""}">${new Date(d + "T12:00:00").toLocaleDateString("vi-VN", { weekday: "short" })}<b>${d.slice(8)}</b></div>`).join("")}</div></div>${state.assets
+    .map((a) => {
+      const contracts = state.contracts.filter(
+        (c) => c.assetId === a.id && c.start <= end && c.end >= start,
+      );
+      const lanes = [];
+      const layout = contracts
+        .slice()
+        .sort((a, b) => a.start.localeCompare(b.start))
+        .map((c) => {
+          const left = Math.max(0, dayIndex(c.start)),
+            right = Math.min(13, dayIndex(c.end));
+          let lane = lanes.findIndex((last) => last < left);
+          if (lane < 0) {
+            lane = lanes.length;
+            lanes.push(right);
+          } else lanes[lane] = right;
+          return { c, left, right, lane };
+        });
+      const height = Math.max(46, lanes.length * 28 + 14);
+      return `<div class="crow"><div class="clabel"><b>${esc(a.name)}</b><small>${esc(a.category)} · SL ${a.quantity}</small></div><div class="ctrack" style="width:672px;height:${height}px"><div class="cbg">${days.map((d) => `<button data-day="${d}" class="${d === today() ? "today" : ""}" aria-label="Lịch ${dateLabel(d)}"></button>`).join("")}</div>${layout.map(({ c, left, right, lane }) => `<button class="bar cal-bar ${overdue(c) ? "late" : active(c) ? "" : "returned"}" style="left:${left * 48 + 3}px;width:${(right - left + 1) * 48 - 6}px;top:${lane * 28 + 7}px" data-detail="${c.id}" title="${esc(c.code + " · " + customerName(c.customerId))}">${esc(customerName(c.customerId))} × ${c.quantity}</button>`).join("")}</div></div>`;
+    })
+    .join(
+      "",
+    )}</div></div>${!state.assets.length ? '<div class="empty">Thêm tài sản để xem lịch.</div>' : ""}<div class="legend"><span class="pill st-out">Đang thuê</span><span class="pill st-late">Quá hạn</span><span class="pill st-returned">Đã trả</span></div><h3 class="schedule-title">Lịch ngày ${dateLabel(calendarDay)}</h3><div class="list">${selected.length ? selected.map(({ c, type }) => `<div class="row"><span><span class="r-top"><b>${type} · ${esc(assetName(c.assetId))}</b></span><span class="r-sub">${esc(customerName(c.customerId))} · ${esc(c.code)} · ${c.quantity} đơn vị</span></span><button class="btn sm" data-detail="${c.id}">Chi tiết</button></div>`).join("") : '<div class="empty">Không có lịch trong ngày này.</div>'}</div><p class="footnote">Lịch theo ngày giao và hẹn trả trên đơn. Chưa hỗ trợ đặt chỗ theo giờ; hợp đồng giữ tồn từ lúc tạo đến khi nhận trả.</p></section>`;
 }
 function content() {
   const q = search.toLowerCase();
   if (view === "overview") return overview();
   if (view === "calendar") return calendar();
   if (view === "assets")
-    return `<section class="panel">${table(
-      [
-        "Tài sản / Sản phẩm",
-        "Danh mục",
-        "Đơn giá",
-        "Tổng số lượng",
-        "Khả dụng",
-        "Bảo trì",
-        "",
-      ],
+    return `<div class="chips category-filters"><button class="chipbtn ${assetFilter === "all" ? "on" : ""}" data-category="all" aria-pressed="${assetFilter === "all"}">Tất cả</button>${[...new Set(state.assets.map((a) => a.category))].map((c) => `<button class="chipbtn" data-category="${esc(c)}" aria-pressed="${assetFilter === c}">${esc(c)}</button>`).join("")}</div><div class="grid2">${
       state.assets
-        .filter((a) => [a.name, a.category].join(" ").toLowerCase().includes(q))
+        .filter(
+          (a) =>
+            (assetFilter === "all" || a.category === assetFilter) &&
+            [a.name, a.category].join(" ").toLowerCase().includes(q),
+        )
         .map(
           (a) =>
-            `<tr><td><strong>${esc(a.name)}</strong></td><td>${esc(a.category)}</td><td>${money(a.price)}<small>/ ${esc(a.unit)}</small></td><td>${a.quantity}</td><td><span class="badge ${available(a) > 0 ? "" : "orange"}">${available(a)} sẵn sàng</span></td><td>${Number(a.maintenance || 0)}</td><td><button class="text-btn" data-maintenance="${a.id}">Bảo trì</button></td></tr>`,
-        ),
-    )}</section>`;
+            `<article class="card acard"><div class="t"><div><h3>${esc(a.name)}</h3><div class="r-sub">${esc(a.category)} · SL ${a.quantity}</div></div><span class="pill ${available(a) > 0 ? "st-ready" : "st-maint"}">${available(a)} sẵn sàng</span></div><div class="pr">${money(a.price)} / ${esc(a.unit)}</div><div class="asset-counts"><span class="chip">Đang thuê <i>${used(a.id)}</i></span><span class="chip">Bảo trì <i>${Number(a.maintenance || 0)}</i></span></div><div class="row-actions"><button class="btn sm" data-maintenance="${a.id}">Bảo trì</button><button class="btn sm" data-rentasset="${a.id}">Cho thuê</button></div></article>`,
+        )
+        .join("") ||
+      '<div class="empty"><b>Không có tài sản phù hợp</b>Thêm tài sản mới hoặc đổi từ khóa tìm kiếm.</div>'
+    }</div>`;
   if (view === "customers")
-    return `<section class="panel">${table(
-      ["Khách thuê", "Điện thoại", "Email", "Số hợp đồng"],
+    return `<div class="list">${
       state.customers
         .filter((c) =>
           [c.name, c.phone, c.email].join(" ").toLowerCase().includes(q),
         )
-        .map(
-          (c) =>
-            `<tr><td><strong>${esc(c.name)}</strong></td><td>${esc(c.phone)}</td><td>${esc(c.email)}</td><td>${state.contracts.filter((x) => x.customerId === c.id).length}</td></tr>`,
-        ),
-    )}</section>`;
+        .map((c) => {
+          const contracts = state.contracts.filter(
+            (x) => x.customerId === c.id,
+          );
+          return `<div class="row customer-row"><span><span class="r-top"><b>${esc(c.name)}</b></span><span class="r-sub">${esc(c.phone)}${c.email ? " · " + esc(c.email) : ""}</span></span><span class="r-end"><span class="amt">${money(contracts.reduce((n, x) => n + x.total, 0))}</span><span class="r-sub">${contracts.length} đơn thuê</span></span></div>`;
+        })
+        .join("") ||
+      '<div class="empty"><b>Chưa có khách hàng phù hợp</b>Thêm khách thuê mới để bắt đầu.</div>'
+    }</div>`;
   if (view === "contracts")
     return `<div class="filter-tabs">${[
       ["all", "Tất cả"],
@@ -230,61 +317,68 @@ function content() {
     ]
       .map(
         ([id, label]) =>
-          `<button class="${contractFilter === id ? "selected" : ""}" data-filter="${id}">${label}</button>`,
+          `<button class="chipbtn" aria-pressed="${contractFilter === id}" data-filter="${id}">${label}</button>`,
       )
-      .join("")}</div><section class="panel">${table(
-      [
-        "Hợp đồng / Khách thuê",
-        "Tài sản",
-        "Thời gian",
-        "Giá trị",
-        "Trạng thái",
-        "",
-      ],
-      contractRows(
-        state.contracts
-          .filter(
-            (c) =>
-              contractFilter === "all" ||
-              (contractFilter === "late"
-                ? overdue(c)
-                : c.status === contractFilter),
-          )
-          .filter((c) =>
-            [c.code, customerName(c.customerId), assetName(c.assetId)]
-              .join(" ")
-              .toLowerCase()
-              .includes(q),
-          )
-          .slice()
-          .reverse(),
-      ),
-    )}</section>`;
+      .join("")}</div><div class="list">${
+      state.contracts
+        .filter(
+          (c) =>
+            contractFilter === "all" ||
+            (contractFilter === "late"
+              ? overdue(c)
+              : c.status === contractFilter),
+        )
+        .filter((c) =>
+          [c.code, customerName(c.customerId), assetName(c.assetId)]
+            .join(" ")
+            .toLowerCase()
+            .includes(q),
+        )
+        .slice()
+        .reverse()
+        .map(
+          (c) =>
+            `<div class="row contract-row"><span><span class="r-top"><span class="code">${esc(c.code)}</span><b>${esc(customerName(c.customerId))}</b><span class="pill ${overdue(c) ? "st-late" : active(c) ? "st-out" : "st-returned"}">${overdue(c) ? "Quá hạn" : active(c) ? "Đang thuê" : "Đã trả"}</span></span><span class="r-sub">${esc(assetName(c.assetId))} × ${c.quantity}</span><span class="r-sub">${dateLabel(c.start)} → ${dateLabel(c.end)}</span></span><span class="r-end"><span class="amt">${money(c.total)}</span><span class="due">Còn thu ${money(Math.max(0, c.total - c.paid))}</span><span class="row-actions"><button class="btn sm" data-detail="${c.id}">Chi tiết</button>${active(c) ? `<button class="btn sm pri" data-return="${c.id}">Nhận trả</button>` : ""}</span></span></div>`,
+        )
+        .join("") ||
+      '<div class="empty"><b>Chưa có đơn thuê phù hợp</b>Tạo đơn thuê mới hoặc đổi bộ lọc.</div>'
+    }</div>`;
   if (view === "payments")
-    return `<section class="panel">${table(
-      [
-        "Hợp đồng",
-        "Khách thuê",
-        "Tổng giá trị",
-        "Đã thu",
-        "Còn phải thu",
-        "Cọc đang giữ",
-        "",
-      ],
-      state.contracts.map(
-        (c) =>
-          `<tr><td><strong>${esc(c.code)}</strong></td><td>${esc(customerName(c.customerId))}</td><td>${money(c.total)}</td><td>${money(c.paid)}</td><td>${money(Math.max(0, c.total - c.paid))}</td><td>${money(held(c))}</td><td>${held(c) > 0 ? `<button class="text-btn" data-refund="${c.id}">Hoàn cọc</button>` : ""}${c.paid < c.total ? `<button class="text-btn" data-pay="${c.id}">Ghi nhận thu</button>` : '<span class="badge">Đã thanh toán</span>'}</td></tr>`,
-      ),
-    )}<p class="footnote">Tiền cọc được theo dõi riêng, không cộng vào doanh thu hay trừ công nợ tiền thuê. Thanh toán được ghi nhận thủ công.</p></section>`;
+    return `<div class="kpis"><div class="kpi"><span>Tiền thuê còn phải thu</span><b class="money-kpi">${money(state.contracts.reduce((n, c) => n + Math.max(0, c.total - c.paid), 0))}</b></div><div class="kpi"><span>Tiền cọc đang giữ</span><b class="money-kpi">${money(state.contracts.reduce((n, c) => n + held(c), 0))}</b></div></div><div class="list">${state.contracts.map((c) => `<div class="row"><span><span class="r-top"><b>${esc(customerName(c.customerId))}</b><span class="code">${esc(c.code)}</span></span><span class="r-sub">Đã thu ${money(c.paid)} / ${money(c.total)}</span><span class="r-sub">Cọc đang giữ ${money(held(c))}</span></span><span class="r-end"><span class="amt">${money(Math.max(0, c.total - c.paid))}</span><span class="row-actions">${held(c) > 0 ? `<button class="btn sm" data-refund="${c.id}">Hoàn cọc</button>` : ""}${c.paid < c.total ? `<button class="btn sm pri" data-pay="${c.id}">Ghi nhận thu</button>` : '<span class="pill st-ready">Đã thanh toán</span>'}</span></span></div>`).join("") || '<div class="empty"><b>Chưa có đơn thuê</b>Công nợ và tiền cọc sẽ hiển thị tại đây.</div>'}</div><p class="footnote">Tiền cọc theo dõi riêng, không cộng vào doanh thu hoặc trừ công nợ tiền thuê.</p>`;
   return `<section class="license-layout"><article class="panel"><span class="eyebrow">BẢN QUYỀN KHÔNG GIAN LÀM VIỆC</span><h2>${db ? "Kích hoạt để bắt đầu kinh doanh" : "Bạn đang khám phá bản demo"}</h2><p>Mỗi key kích hoạt cho một đơn vị cho thuê. Dữ liệu giữa các đơn vị được phân quyền riêng.</p><div class="license-state"><span class="badge">${db ? (license && new Date(license.expires_at) > new Date() ? "Đã kích hoạt" : "Chưa kích hoạt") : "Chế độ demo"}</span>${license ? `<p>Hạn sử dụng: ${esc(new Date(license.expires_at).toLocaleDateString("vi-VN"))}</p>` : ""}</div><form id="key-form"><label>Key bản quyền<input name="key" placeholder="Nhập key do nhà cung cấp cấp" required ${db ? "" : "disabled"}></label><button class="primary" ${db ? "" : "disabled"}>Kích hoạt key</button></form><p class="footnote">${db ? "Key chỉ được sử dụng một lần và xác thực trên máy chủ." : "Để dùng key thật, kết nối dự án Supabase riêng theo README."}</p></article><article class="panel tip"><h3>Dành cho nhiều mô hình cho thuê</h3><p>✓ Danh mục tài sản tự do</p><p>✓ Đơn giá theo giờ, ngày, tháng hoặc lượt</p><p>✓ Khách thuê và hợp đồng</p><p>✓ Tồn khả dụng và công nợ</p><p>✓ Không gian dữ liệu riêng</p></article></section>`;
+}
+const iconPaths = {
+  overview: '<path d="M4 13h6V4H4zM14 20h6V11h-6zM4 20h6v-4H4zM14 7h6V4h-6z"/>',
+  calendar:
+    '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
+  contracts: '<path d="M6 3h9l3 3v15H6zM9 11h6M9 15h6"/>',
+  assets:
+    '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5"/>',
+  customers:
+    '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-4 3-6 7-6s7 2 7 6"/>',
+  payments:
+    '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h3"/>',
+  license:
+    '<circle cx="8" cy="9" r="4"/><path d="M11 12l8 8M15 16l3-3M17 18l3-3"/>',
+};
+const icon = (id) =>
+  `<svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconPaths[id] || ""}</svg>`;
+function navHTML() {
+  return nav
+    .map(
+      ([id, , label]) =>
+        `<button class="tab" data-view="${id}" ${view === id ? 'aria-current="page"' : ""}>${icon(id)}<span>${label}</span></button>`,
+    )
+    .join("");
 }
 function render() {
   if (db && !session) {
     renderAuth();
     return;
   }
+  const title = nav.find((x) => x[0] === view)[2];
   document.querySelector("#app").innerHTML =
-    `<aside><a class="brand" href="#"><span class="logo">R</span>RENT<span class="brand-dot">OS</span></a><div class="workspace"><span class="workspace-icon">▦</span><div><strong>${esc(org?.name || "Không gian demo")}</strong><small>${db ? "Không gian riêng" : "Dành cho mọi ngành nghề"}</small></div></div><span class="nav-label">VẬN HÀNH CHO THUÊ</span><nav>${nav.map(([id, icon, label]) => `<button data-view="${id}" class="${view === id ? "selected" : ""}"><span>${icon}</span>${label}${id === "license" ? "<i>KEY</i>" : ""}</button>`).join("")}</nav><div class="sidebar-bottom"><div class="help"><b>Từ bàn giao đến thu hồi</b><p>Theo dõi tài sản, tiền thuê<br>và tiền cọc trong một nơi.</p><span>↗</span></div><button class="profile" id="profile"><span class="avatar">${db ? "U" : "D"}</span><div><strong>${db ? "Tài khoản của bạn" : "Tài khoản trải nghiệm"}</strong><small>${db ? "Nhấn để đăng xuất" : "Dữ liệu lưu trên trình duyệt"}</small></div></button></div></aside><main><header><div class="breadcrumb">RENTOS <span>/</span> <b>${nav.find((x) => x[0] === view)[2]}</b></div><div class="header-right"><span class="status-dot"></span>${db ? "Supabase riêng" : "Bản trải nghiệm"}<span class="avatar small">${db ? "U" : "D"}</span></div></header><div class="page"><div class="page-title"><div><h1>${nav.find((x) => x[0] === view)[2]}</h1><p>${view === "overview" ? "Tài sản, lịch trả và dòng tiền. Nắm rõ để vận hành." : view === "calendar" ? "Chủ động lịch giao, hẹn trả và thu hồi tài sản." : "Quản lý vòng đời cho thuê trong không gian của bạn."}</p></div>${["overview", "assets", "customers", "contracts"].includes(view) ? `<button class="primary" data-add="${{ overview: "contract", assets: "asset", customers: "customer", contracts: "contract" }[view]}">＋ ${view === "assets" ? "Thêm tài sản" : view === "customers" ? "Thêm khách thuê" : "Tạo hợp đồng"}</button>` : `<span class="date">◷ ${new Date().toLocaleDateString("vi-VN", { day: "numeric", month: "long", year: "numeric" })}</span>`}</div>${!db ? '<div class="demo-banner"><span>◈</span> Chế độ demo · Dữ liệu mẫu được lưu trong trình duyệt này.<button class="text-btn" data-view="license">Kích hoạt bản quyền →</button></div>' : ""}${["assets", "customers", "contracts"].includes(view) ? `<div class="search-bar"><input id="search" placeholder="Tìm kiếm…" value="${esc(search)}"><span>${state[view].length} bản ghi</span></div>` : ""}<div id="content">${content()}</div><footer>RENTOS / HỆ ĐIỀU HÀNH CHO THUÊ <span>Độc lập · Linh hoạt · Tập trung</span></footer></div></main><dialog id="modal"></dialog><div id="toast" role="status"></div>`;
+    `<div class="shell"><aside class="side"><div><a class="brand" href="#"><i></i>Rentbook</a><div class="wsname" style="max-width:none;margin-top:6px">${esc(org?.name || "Không gian demo")}</div></div><nav class="snav" aria-label="Điều hướng">${navHTML()}</nav><div class="side-bottom"><button class="theme-btn btn sm" data-theme-toggle>Đổi sáng / tối</button><button class="btn sm" id="profile">${db ? "Đăng xuất" : "Bản trải nghiệm"}</button><small>${db ? "Dữ liệu đồng bộ trong không gian riêng của bạn." : "Bản demo. Dữ liệu lưu trong trình duyệt này."}</small></div></aside><div class="content-column"><div class="top"><div class="brand"><i></i>Rentbook</div><div class="wsname">${esc(org?.name || "Không gian demo")}</div><button class="btn sm" data-theme-toggle aria-label="Đổi giao diện sáng tối">◐</button><button class="btn sm mobile-signout" id="mobile-profile">${db ? "Đăng xuất" : "Demo"}</button></div><main class="main"><div class="head page-title"><div><h1>${view === "overview" ? "Hôm nay" : title}</h1><p>${view === "overview" ? new Date().toLocaleDateString("vi-VN", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : view === "calendar" ? "Theo dõi ngày giao và hẹn trả của từng đơn thuê." : view === "assets" ? `${state.assets.length} tài sản · Danh mục theo ngành kinh doanh` : view === "customers" ? `${state.customers.length} khách hàng` : "Theo dõi đầy đủ tài sản, tiền thuê và tiền cọc."}</p></div>${["overview", "assets", "customers", "contracts"].includes(view) ? `<button class="btn pri primary" data-add="${{ overview: "contract", assets: "asset", customers: "customer", contracts: "contract" }[view]}">＋ ${view === "assets" ? "Thêm tài sản" : view === "customers" ? "Thêm khách thuê" : "Tạo đơn thuê"}</button>` : ""}</div>${!db ? '<div class="demo-banner">Bản demo · Dữ liệu lưu trên trình duyệt này.</div>' : ""}${["assets", "customers", "contracts"].includes(view) ? `<div class="filters search-bar"><input id="search" class="search" type="search" placeholder="Tìm kiếm theo tên${view === "contracts" ? " hoặc mã đơn" : ""}…" value="${esc(search)}"></div>` : ""}<div id="content">${content()}</div><footer>Rentbook · Quản lý cho thuê đa ngành</footer></main></div></div><nav class="tabs" aria-label="Điều hướng di động">${navHTML()}</nav><dialog id="modal"></dialog><div id="toast" role="status"></div>`;
   bind();
 }
 function bind() {
@@ -292,6 +386,31 @@ function bind() {
     const b = e.target.closest("button");
     if (!b) return;
     const d = b.dataset;
+    if (b.hasAttribute("data-theme-toggle")) {
+      const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const current =
+        document.documentElement.dataset.theme || (dark ? "dark" : "light");
+      document.documentElement.dataset.theme =
+        current === "dark" ? "light" : "dark";
+      try {
+        localStorage.setItem(
+          "rentbook-theme",
+          document.documentElement.dataset.theme,
+        );
+      } catch {}
+      return;
+    }
+    if (d.category) {
+      assetFilter = d.category;
+      render();
+      return;
+    }
+    if (d.rentasset) {
+      openForm("contract");
+      const select = document.querySelector("#modal [name=assetId]");
+      if (select) select.value = d.rentasset;
+      return;
+    }
     if (d.view) {
       view = d.view;
       search = "";
@@ -314,7 +433,8 @@ function bind() {
       dt.setDate(dt.getDate() + calendarOffset);
       calendarDay = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
       render();
-    } else if (b.id === "profile" && db) await db.auth.signOut();
+    } else if ((b.id === "profile" || b.id === "mobile-profile") && db)
+      await db.auth.signOut();
   };
   document.querySelector("#search")?.addEventListener("input", (e) => {
     search = e.target.value;
@@ -557,7 +677,7 @@ function openDetail(id) {
 }
 function renderAuth() {
   document.querySelector("#app").innerHTML =
-    `<div class="auth"><div class="auth-story"><div class="brand"><span class="logo">R</span>RENT<span class="brand-dot">OS</span></div><span class="eyebrow">HỆ ĐIỀU HÀNH CHO THUÊ ĐA NGÀNH</span><h2>Tài sản luôn luân chuyển.<br>Vận hành luôn trong tầm tay.</h2><p>Từ lần bàn giao đầu tiên đến lần nhận trả cuối cùng.</p><div class="auth-flow"><span>01 / QUẢN LÝ KHO</span><span>02 / GIAO & NHẬN TRẢ</span><span>03 / TIỀN THUÊ & TIỀN CỌC</span></div></div><section class="panel"><span class="eyebrow">KHÔNG GIAN KINH DOANH CỦA BẠN</span><h1>Đăng nhập bàn điều hành.</h1><p>Không gian riêng cho đơn vị kinh doanh cho thuê của bạn.</p><form id="auth-form">${input("Email", "email", "email")}${input("Mật khẩu", "password", "password", 'minlength="8"')}<p id="auth-message" role="status"></p><button class="primary" name="action" value="signin">Đăng nhập</button><button name="action" value="signup">Tạo tài khoản</button></form></section></div>`;
+    `<div class="auth"><div class="auth-story"><div class="brand"><i></i>Rentbook</div><span class="eyebrow">HỆ ĐIỀU HÀNH CHO THUÊ ĐA NGÀNH</span><h2>Tài sản luôn luân chuyển.<br>Vận hành luôn trong tầm tay.</h2><p>Từ lần bàn giao đầu tiên đến lần nhận trả cuối cùng.</p><div class="auth-flow"><span>01 / QUẢN LÝ KHO</span><span>02 / GIAO & NHẬN TRẢ</span><span>03 / TIỀN THUÊ & TIỀN CỌC</span></div></div><section class="panel"><span class="eyebrow">KHÔNG GIAN KINH DOANH CỦA BẠN</span><h1>Đăng nhập bàn điều hành.</h1><p>Không gian riêng cho đơn vị kinh doanh cho thuê của bạn.</p><form id="auth-form">${input("Email", "email", "email")}${input("Mật khẩu", "password", "password", 'minlength="8"')}<p id="auth-message" role="status"></p><button class="primary" name="action" value="signin">Đăng nhập</button><button name="action" value="signup">Tạo tài khoản</button></form></section></div>`;
   document.querySelector("form").onsubmit = async (e) => {
     e.preventDefault();
     const d = Object.fromEntries(new FormData(e.target));
@@ -596,6 +716,11 @@ async function load() {
   state = r.data?.data || { assets: [], customers: [], contracts: [] };
   license = l.data;
 }
+try {
+  const theme = localStorage.getItem("rentbook-theme");
+  if (["light", "dark"].includes(theme))
+    document.documentElement.dataset.theme = theme;
+} catch {}
 function init() {
   if (!db) {
     render();

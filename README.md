@@ -63,3 +63,9 @@ npm run test:smoke
 ```
 
 Nếu Chromium hệ thống đã có sẵn: `CHROMIUM_PATH=/usr/bin/chromium npm run test:smoke`. Bài kiểm thử dùng browser context mới, kiểm tra cọc/hoàn cọc, thanh toán, bảo trì, lịch, quá hạn, dữ liệu cũ và kích thước màn hình di động. Ảnh chụp được lưu trong test-results (bỏ qua bởi Git).
+
+## Giao diện Rentbook
+
+Giao diện hiện tại dựa trên mẫu `rentbook_1.html` người dùng cung cấp: bảng màu xanh ngọc, bố cục sáng gọn, menu trái trên desktop và điều hướng dưới trên mobile. Có chế độ sáng/tối (ghi nhớ trong trình duyệt), danh sách đơn thuê dạng hàng, tài sản dạng thẻ với bộ lọc danh mục, lịch thanh theo từng tài sản trong 14 ngày và tổng quan thu tiền sáu tháng. Biểu đồ chỉ lấy giao dịch `rent` có ngày trong `transactions`; không coi tiền cọc là doanh thu và không tự suy diễn ngày thu của dữ liệu cũ.
+
+Chỉ áp dụng giao diện và các thao tác tương thích với mô hình dữ liệu hiện tại. Không nhập dữ liệu mẫu, mã JavaScript demo hoặc cơ chế workspace local của file mẫu vào Supabase. Các khả năng nâng cao trong mẫu như đặt chỗ tương lai theo giờ, trường động theo loại hình và hủy đơn chưa được triển khai. Chế độ Supabase và cấp key giữ nguyên, không cần chạy lại schema.
