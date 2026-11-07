@@ -38,3 +38,28 @@ Kiểm tra thủ công: tạo tài sản và khách thuê; lập hợp đồng; 
 Tồn kho được giữ trong toàn bộ thời gian hợp đồng đang thuê, chưa có đặt lịch theo khung giờ. Giá được chốt theo số đơn vị tính tiền nhập thủ công, không tự suy ra từ ngày. Thanh toán được ghi nhận thủ công, chưa tích hợp bán key tự động, hóa đơn, cổng thanh toán hoặc giao nhận. Chưa có ảnh, mã tài sản riêng lẻ, phí trễ hạn hoặc khấu hao.
 
 Dữ liệu MVP lưu một JSON document cho mỗi workspace. Hai phiên ghi đồng thời có thể ghi đè nhau; cần tách bảng giao dịch, cập nhật tồn kho bằng transaction và thêm nhật ký thanh toán trước khi vận hành nhiều nhân viên. Người mua có thể sửa dữ liệu workspace của mình qua API nhưng không thể tự cấp bản quyền hoặc truy cập workspace khác. Cần bổ sung rate limiting cho RPC kích hoạt key trước khi mở bán công khai.
+
+## RENTOS — bàn điều hành cho thuê
+
+Bản giao diện mới dùng tên RENTOS, tông xanh đậm/cam và màn hình đăng nhập hai cột. Bàn điều hành theo dõi tài sản đang thuê, lịch hẹn trả trong ngày, hợp đồng quá hạn, công nợ và kho khả dụng. Lịch giao–trả hiển thị từng ngày trong tuần; danh sách hợp đồng lọc theo đang thuê/quá hạn/đã trả.
+
+Tiền cọc tách riêng tiền thuê: nhập cọc khi tạo hợp đồng, hoàn một phần hoặc toàn bộ khi nhận trả, và hoàn phần còn lại trong Công nợ & tiền cọc. Chi tiết hợp đồng lưu ghi chú giao/nhận và nhật ký các lần thu/hoàn từ phiên bản này. Hợp đồng cũ vẫn đọc được; không tự tạo nhật ký giả cho các khoản thu cũ. Tài sản bảo trì bị trừ khỏi tồn khả dụng; cập nhật số lượng bảo trì về 0 khi hoàn tất. Dữ liệu bổ sung dùng các trường JSON tùy chọn trong records, không cần chạy lại schema SQL hay xóa dữ liệu.
+
+Lịch thể hiện ngày giao/hẹn trả theo hợp đồng; không phải hệ thống đặt chỗ tương lai. Chưa hỗ trợ hợp đồng nhiều dòng tài sản, trả từng phần, tự động tính phí trễ/hư hỏng, khấu trừ cọc hoặc giao dịch tồn kho đồng thời. Không tự quy đổi tổng đơn vị giữa các ngành; người dùng cần đặt danh mục và đơn vị tính phù hợp.
+
+### Kiểm thử nghiệp vụ bằng trình duyệt
+
+Dùng một terminal chạy server demo riêng, ghi đè biến Supabase để tránh chạm dữ liệu thật:
+
+```sh
+VITE_SUPABASE_URL='' VITE_SUPABASE_ANON_KEY='' npm run dev -- --port 5174
+```
+
+Terminal khác chạy:
+
+```sh
+npx playwright install chromium
+npm run test:smoke
+```
+
+Nếu Chromium hệ thống đã có sẵn: `CHROMIUM_PATH=/usr/bin/chromium npm run test:smoke`. Bài kiểm thử dùng browser context mới, kiểm tra cọc/hoàn cọc, thanh toán, bảo trì, lịch, quá hạn, dữ liệu cũ và kích thước màn hình di động. Ảnh chụp được lưu trong test-results (bỏ qua bởi Git).
