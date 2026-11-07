@@ -130,13 +130,13 @@ try {
     .getByText("Shop mới <an toàn>", { exact: true })
     .waitFor();
   await page.setViewportSize({ width: 390, height: 844 });
-  assert(await page.locator("[data-signout]").isVisible());
+  assert(await page.locator("[data-signout]:visible").isVisible());
   assert(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   );
-  await page.locator("[data-signout]").click();
+  await page.locator("[data-signout]:visible").click();
   await page.locator(".auth-page-header [data-login]").waitFor();
   assert(logout);
   assert.equal(await page.locator(".shop-label").count(), 0);
