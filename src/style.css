@@ -1596,3 +1596,7 @@ th {
   .side-bottom { margin-top: 0; }
   .main > .account-header [data-signout] { display: none; }
 }
+
+.sidebar-controls { display: flex; align-items: center; gap: 6px; }
+.sidebar-controls .btn { flex: 1 1 auto; justify-content: center; white-space: nowrap; font-size: 11px; padding: 5px 8px; }
+.sidebar-controls .theme-btn { order: -1; }
