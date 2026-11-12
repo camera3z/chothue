@@ -1,4 +1,5 @@
 import "./style.css";
+import { renderStorefront } from "./storefront.js";
 import { createClient } from "@supabase/supabase-js";
 const configured = Boolean(
   import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY,
@@ -100,6 +101,7 @@ try {
   state = structuredClone(seed);
 }
 const nav = [
+  ["storefront", "▣", "Trang trưng bày"],
   ["overview", "◫", "Tổng quan"],
   ["calendar", "▦", "Lịch"],
   ["assets", "▣", "Tài sản"],
@@ -402,7 +404,16 @@ function calendar() {
       "",
     )}</div></div>${!state.assets.length ? '<div class="empty">Thêm tài sản để xem lịch.</div>' : ""}<div class="legend"><span class="pill st-out">Đang thuê</span><span class="pill st-late">Quá hạn</span><span class="pill st-returned">Đã trả</span></div><h3 class="schedule-title">Lịch ngày ${dateLabel(calendarDay)}</h3><div class="list">${selected.length ? selected.map(({ c, type }) => `<div class="row"><span><span class="r-top"><b>${type} · ${esc(assetName(c.assetId))}</b></span><span class="r-sub">${esc(customerName(c.customerId))} · ${esc(c.code)} · ${c.quantity} đơn vị</span></span><button class="btn sm" data-detail="${c.id}">Chi tiết</button></div>`).join("") : '<div class="empty">Không có lịch trong ngày này.</div>'}</div><p class="footnote">Lịch theo ngày giao và hẹn trả trên đơn. Chưa hỗ trợ đặt chỗ theo giờ; hợp đồng giữ tồn từ lúc tạo đến khi nhận trả.</p></section>`;
 }
+let storefrontConfig = null;
+function storefrontSettings() {
+  const url = new URL(location.href);
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("shop", org?.id || "");
+  return `<section class="card"><h2>Trang trưng bày dành cho khách</h2><p class="r-sub">Khách chỉ thấy tài sản còn sẵn sàng. Quản trị tiếp tục xem tất cả trong mục Tài sản, kèm số đang thuê và bảo trì.</p><form id="storefront-form"><label>Tên shop công khai<input name="name" maxlength="120" required value="${esc(storefrontConfig?.name || shopName())}"></label><label class="chk"><input type="checkbox" name="enabled" ${storefrontConfig?.enabled ? "checked" : ""}>Mở trang trưng bày công khai</label><p class="footnote">Khi mở, tên, ảnh, loại hình, giá và số lượng khả dụng được công khai. Không công khai khách thuê, hợp đồng hay công nợ.</p><button class="btn pri" ${db ? "" : "disabled"}>Lưu trang trưng bày</button><p id="storefront-status" role="status"></p></form>${db ? `<label>Đường dẫn gửi khách<input readonly value="${esc(url.href)}"></label><a class="btn" href="${esc(url.href)}" target="_blank" rel="noopener">Xem trang khách</a>` : "<p>Cần kết nối Supabase để mở trang công khai.</p>"}</section>`;
+}
 function content() {
+  if (view === "storefront") return storefrontSettings();
   const q = search.toLowerCase();
   if (view === "overview") return overview();
   if (view === "calendar") return calendar();
@@ -490,7 +501,7 @@ const iconPaths = {
     '<circle cx="8" cy="9" r="4"/><path d="M11 12l8 8M15 16l3-3M17 18l3-3"/>',
 };
 const icon = (id) =>
-  `<svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconPaths[id] || ""}</svg>`;
+  `<svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconPaths[id] || iconPaths.assets}</svg>`;
 function navHTML() {
   return nav
     .map(
@@ -619,6 +630,33 @@ function bind() {
       render();
     }
   };
+  document
+    .querySelector("#storefront-form")
+    ?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const b = e.submitter;
+      b.disabled = true;
+      const d = new FormData(e.target);
+      const config = {
+        organization_id: org.id,
+        name: String(d.get("name")).trim(),
+        enabled: d.has("enabled"),
+      };
+      try {
+        if (!config.name) throw Error("Hãy nhập tên shop.");
+        const { error } = await db.from("storefronts").upsert(config);
+        if (error) throw error;
+        storefrontConfig = config;
+        document.querySelector("#storefront-status").textContent =
+          "Đã lưu. Bạn có thể mở đường dẫn để xem trang khách.";
+      } catch (error) {
+        document.querySelector("#storefront-status").textContent =
+          "Chưa lưu được. Kiểm tra SQL trang trưng bày và key còn hạn. " +
+          error.message;
+      } finally {
+        b.disabled = false;
+      }
+    });
   document.querySelector("#search")?.addEventListener("input", (e) => {
     search = e.target.value;
     document.querySelector("#content").innerHTML = content();
@@ -933,6 +971,12 @@ async function load() {
   org = o.data;
   state = r.data?.data || { assets: [], customers: [], contracts: [] };
   license = l.data;
+  const storefront = await db
+    .from("storefronts")
+    .select("*")
+    .eq("organization_id", id)
+    .maybeSingle();
+  storefrontConfig = storefront.error ? null : storefront.data;
   await hydrateImages(state);
 }
 try {
@@ -941,6 +985,11 @@ try {
     document.documentElement.dataset.theme = theme;
 } catch {}
 function init() {
+  const publicShop = new URLSearchParams(location.search).get("shop");
+  if (publicShop !== null) {
+    renderStorefront(db, publicShop);
+    return;
+  }
   if (!db) {
     render();
     return;

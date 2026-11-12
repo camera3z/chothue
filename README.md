@@ -85,3 +85,15 @@ Trước khi tải ảnh thật: chạy toàn bộ `supabase/migrations/20261112
 Ảnh mới chỉ được gắn vào tài sản sau khi upload thành công; nếu lưu records thất bại, ứng dụng thử xóa object mới. Đổi/gỡ ảnh không xóa vĩnh viễn object cũ (tránh làm hỏng dữ liệu tham chiếu/khôi phục); quản trị viên có thể dọn object không còn tham chiếu sau khi kiểm tra. Chế độ demo lưu ảnh dưới dạng data URL trong localStorage, có thể bị giới hạn dung lượng trình duyệt.
 
 Kiểm tra: chạy server demo cổng 5174 rồi `CHROMIUM_PATH=/usr/bin/chromium node tests/asset-images-smoke.mjs`. Kiểm thử demo bao gồm xem trước, thêm/đổi/gỡ, lưu lại sau reload, loại file/kích thước và màn hình mobile. Chính sách Storage và tải ảnh thật vẫn cần kiểm tra trên Supabase sau khi áp dụng migration, với hai shop để xác minh cách ly dữ liệu.
+
+## Trang trưng bày công khai theo shop
+
+Chạy một lần `supabase/migrations/20261112_public_storefront.sql` trong SQL Editor của dự án đang dùng, sau khi đã có schema ứng dụng và bucket ảnh. Migration có thể chạy lại, không xóa dữ liệu. Không chạy lại schema gốc.
+
+Trong quản trị mở Trang trưng bày → nhập tên shop công khai → bật Mở trang trưng bày công khai → Lưu. Sao chép đường dẫn `https://TEN-MIEN/?shop=ORGANIZATION_ID` để gửi khách. Mặc định shop chưa công khai. Cần license còn hạn để mở/sửa trang; trang tạm đóng khi hết hạn. Tắt checkbox và lưu để ngừng công khai.
+
+Khách không cần tài khoản, chỉ nhận tên shop và các trường cho phép: tên/loại tài sản, đơn giá, đơn vị tính, số lượng khả dụng và ảnh. RPC security definer `get_public_storefront` lọc ngay trên database: khả dụng = tổng số lượng − bảo trì − số lượng hợp đồng active. Tài sản một chiếc đang thuê sẽ ẩn; tài sản nhiều chiếc vẫn hiển thị nếu còn chiếc sẵn sàng. Hợp đồng quá hạn còn active vẫn giữ tồn. Quản trị xem tất cả trong Tài sản, kèm số đang thuê/bảo trì. Không cấp quyền đọc records, members, licenses hoặc storefronts cho anon.
+
+Ảnh trong bucket vẫn private. Policy đọc công khai chỉ cho object đang được tham chiếu bởi tài sản còn sẵn sàng của shop đã mở trang và còn license. Signed URL ảnh đã cấp có thể còn hoạt động tối đa một giờ sau khi tài sản hết hàng hoặc shop tắt trang; dữ liệu danh mục kiểm tra lại khi tải trang. Đây là trang giới thiệu, chưa có đặt hàng/thanh toán/giữ chỗ; tồn có thể thay đổi sau khi khách tải trang. Chưa có đồng bộ realtime.
+
+Kiểm tra SQL bằng PostgreSQL local qua PGlite: `node tests/storefront-sql.mjs` (schema Supabase tối thiểu giả lập, dùng migration thật; không thay thế kiểm tra trên Supabase production). Kiểm tra UI với server có cấu hình Supabase cổng 5173: `CHROMIUM_PATH=/usr/bin/chromium node tests/storefront-smoke.mjs` (RPC giả lập, không đọc dữ liệu thật).

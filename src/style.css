@@ -1666,3 +1666,76 @@ th {
 .acard .t h3 {
   overflow-wrap: anywhere;
 }
+.public-storefront {
+  max-width: 1150px;
+  margin: 0 auto;
+  padding: 20px 0 40px;
+}
+.storefront-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--line);
+}
+.storefront-header a {
+  text-decoration: none;
+}
+.storefront-header .brand {
+  overflow-wrap: anywhere;
+}
+.storefront-hero {
+  padding: 38px 0 24px;
+}
+.storefront-hero h1 {
+  font-size: 30px;
+  margin-top: 12px;
+}
+.storefront-hero p,
+.public-storefront footer {
+  color: var(--muted);
+  font-size: 13px;
+}
+.public-storefront .filters {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.public-storefront .grid2 {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+.public-storefront footer {
+  margin-top: 28px;
+}
+.storefront-loading {
+  max-width: 700px;
+  margin: 15vh auto;
+  line-height: 1.8;
+}
+.storefront-loading h1 {
+  font-size: 24px;
+}
+#storefront-form .chk {
+  display: flex;
+}
+#storefront-status {
+  font-size: 12px;
+  color: var(--muted);
+}
+@media (max-width: 600px) {
+  .storefront-hero h1 {
+    font-size: 25px;
+  }
+  .public-storefront .filters {
+    grid-template-columns: 1fr;
+  }
+  .storefront-header .brand {
+    font-size: 17px;
+  }
+  .storefront-header .btn {
+    font-size: 11px;
+    white-space: nowrap;
+  }
+}
