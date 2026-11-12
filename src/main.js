@@ -107,15 +107,15 @@ let bookingRequests = [],
   bookingRequestsError = "",
   requestLimit = 100;
 const nav = [
+  ["overview", "◫", "Tổng quan"],
+  ["assets", "▣", "Tài sản"],
+  ["contracts", "▤", "Đơn thuê"],
+  ["customers", "♙", "Khách thuê"],
+  ["calendar", "▦", "Lịch"],
+  ["payments", "↗", "Công nợ & tiền cọc"],
   ["requests", "▤", "Yêu cầu đặt thuê"],
   ["storefront", "▣", "Trang trưng bày"],
-  ["overview", "◫", "Tổng quan"],
-  ["calendar", "▦", "Lịch"],
-  ["assets", "▣", "Tài sản"],
-  ["customers", "♙", "Khách thuê"],
-  ["contracts", "▤", "Đơn thuê"],
-  ["payments", "↗", "Công nợ & tiền cọc"],
-  ["license", "◇", "Gói & bản quyền"],
+  ["license", "◇", "Gói và bản quyền"],
 ];
 const active = (c) => c.status === "active";
 const used = (id) =>
