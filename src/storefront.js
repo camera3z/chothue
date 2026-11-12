@@ -1,3 +1,7 @@
+import {
+  openBookingRequest,
+  showPublicRequestStatus,
+} from "./booking-request.js";
 export async function renderStorefront(db, shopId) {
   const root = document.querySelector("#app");
   const esc = (s) =>
@@ -33,6 +37,17 @@ export async function renderStorefront(db, shopId) {
     root.textContent = "Đường dẫn shop không hợp lệ.";
     return;
   }
+  await showPublicRequestStatus(db, shopId);
+  const onRequestLink = () => {
+    if (!document.querySelector(".request-status-dialog"))
+      showPublicRequestStatus(db, shopId);
+  };
+  window.addEventListener("hashchange", onRequestLink);
+  window.addEventListener(
+    "pagehide",
+    () => window.removeEventListener("hashchange", onRequestLink),
+    { once: true },
+  );
   try {
     const { data, error } = await db.rpc("get_public_storefront", {
       p_shop: shopId,
@@ -67,7 +82,7 @@ export async function renderStorefront(db, shopId) {
         filtered
           .map(
             (a) =>
-              `<article class="card acard"><div class="asset-photo">${urls.has(a.imagePath) ? `<img src="${esc(urls.get(a.imagePath))}" alt="${esc(a.name)}" loading="lazy">` : '<span class="asset-photo-placeholder">Chưa có ảnh</span>'}</div><div class="t"><h3>${esc(a.name)}</h3><span class="pill st-ready">Còn ${Number(a.available)} sẵn sàng</span></div><div class="r-sub">${esc(a.category)}</div><div class="pr">${money(a.price)} / ${esc(a.unit)}</div></article>`,
+              `<article class="card acard"><div class="asset-photo">${urls.has(a.imagePath) ? `<img src="${esc(urls.get(a.imagePath))}" alt="${esc(a.name)}" loading="lazy">` : '<span class="asset-photo-placeholder">Chưa có ảnh</span>'}</div><div class="t"><h3>${esc(a.name)}</h3><span class="pill st-ready">Còn ${Number(a.available)} sẵn sàng</span></div><div class="r-sub">${esc(a.category)}</div><div class="pr">${money(a.price)} / ${esc(a.unit)}</div><button class="btn pri" data-book="${esc(a.id)}">Đặt thuê</button></article>`,
           )
           .join("") ||
         '<div class="empty"><b>Chưa có tài sản phù hợp</b>Thử đổi từ khóa hoặc quay lại sau.</div>'
@@ -81,6 +96,13 @@ export async function renderStorefront(db, shopId) {
     root.querySelector("#public-category").onchange = (e) => {
       category = e.target.value;
       root.querySelector("#public-assets").innerHTML = cards();
+    };
+    root.querySelector("#public-assets").onclick = (e) => {
+      const button = e.target.closest("[data-book]");
+      if (button) {
+        const asset = assets.find((a) => a.id === button.dataset.book);
+        if (asset) openBookingRequest(db, shopId, asset);
+      }
     };
     let refreshing = false;
     let imageExpiry = Date.now() + 45 * 60000;

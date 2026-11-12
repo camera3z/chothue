@@ -1739,3 +1739,64 @@ th {
     white-space: nowrap;
   }
 }
+.booking-honeypot {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.booking-error {
+  font-size: 12px;
+  color: var(--bad);
+}
+.booking-estimate {
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--raise);
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.request-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+.request-status-pending {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.request-status-approved {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.request-status-rejected,
+.request-status-cancelled {
+  background: var(--idle-soft);
+  color: var(--idle);
+}
+.request-note {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  color: var(--muted);
+}
+.cal-bar.reserved {
+  background: var(--info-soft);
+  color: var(--info);
+}
+@media (max-width: 480px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.form-grid > label {
+  min-width: 0;
+}
+.form-grid input {
+  min-width: 0;
+}
