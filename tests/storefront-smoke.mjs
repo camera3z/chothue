@@ -16,6 +16,8 @@ try {
   const calls = [];
   const id = "22222222-2222-4222-8222-222222222222";
   let published = true;
+  let rented = false;
+  await page.clock.install();
   await page.route("https://*.supabase.co/**", async (r) => {
     const u = new URL(r.request().url());
     calls.push(u.pathname);
@@ -37,7 +39,7 @@ try {
                   category: "Xe máy",
                   price: 150000,
                   unit: "ngày",
-                  available: 1,
+                  available: rented ? 0 : 1,
                 },
                 {
                   id: "two",
@@ -76,6 +78,29 @@ try {
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   );
+  assert.equal(
+    await page.getByRole("link", { name: "Quản trị / Đăng nhập" }).count(),
+    0,
+  );
+  await page.locator("#public-category").selectOption("all");
+  rented = true;
+  const rentedResponse = page.waitForResponse((r) =>
+    r.url().includes("get_public_storefront"),
+  );
+  await page.clock.fastForward(30000);
+  await rentedResponse;
+  await page
+    .getByRole("heading", { name: "Xe máy còn một chiếc", exact: true })
+    .waitFor({ state: "hidden" });
+  rented = false;
+  const returnedResponse = page.waitForResponse((r) =>
+    r.url().includes("get_public_storefront"),
+  );
+  await page.clock.fastForward(30000);
+  await returnedResponse;
+  await page
+    .getByRole("heading", { name: "Xe máy còn một chiếc", exact: true })
+    .waitFor();
   published = false;
   await page.reload();
   await page

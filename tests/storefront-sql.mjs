@@ -121,6 +121,32 @@ grant select on public.members,public.licenses to authenticated;`);
   );
   await pg.exec("reset role");
   await pg.query(
+    `update records set data=jsonb_set(data,'{contracts,1,status}','"returned"'::jsonb) where organization_id=$1`,
+    [shop],
+  );
+  await pg.exec("set role anon");
+  const afterReturn = (
+    await pg.query("select public.get_public_storefront($1) as value", [shop])
+  ).rows[0].value;
+  assert(
+    afterReturn.assets.some((a) => a.id === "full" && a.available === 1),
+    "Returned asset becomes visible again",
+  );
+  await pg.exec("reset role");
+  await pg.query(
+    `update records set data=jsonb_set(data,'{contracts,1,status}','"active"'::jsonb) where organization_id=$1`,
+    [shop],
+  );
+  await pg.exec("set role anon");
+  const afterRent = (
+    await pg.query("select public.get_public_storefront($1) as value", [shop])
+  ).rows[0].value;
+  assert(
+    !afterRent.assets.some((a) => a.id === "full"),
+    "Rented asset is hidden",
+  );
+  await pg.exec("reset role");
+  await pg.query(
     "update storefronts set enabled=false where organization_id=$1",
     [shop],
   );

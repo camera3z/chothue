@@ -40,10 +40,10 @@ export async function renderStorefront(db, shopId) {
     if (error) throw error;
     if (!data) {
       root.innerHTML =
-        '<div class="storefront-loading"><h1>Trang trưng bày chưa mở</h1><p>Shop chưa công khai hoặc hiện không có gói sử dụng còn hạn.</p><a href="/">Về Rentbook</a></div>';
+        '<div class="storefront-loading"><h1>Trang trưng bày chưa mở</h1><p>Shop chưa công khai hoặc hiện không có gói sử dụng còn hạn.</p></div>';
       return;
     }
-    const assets = data.assets || [];
+    let assets = (data.assets || []).filter((a) => Number(a.available) > 0);
     const urls = new Map();
     const paths = assets
       .map((a) => a.imagePath)
@@ -73,7 +73,7 @@ export async function renderStorefront(db, shopId) {
         '<div class="empty"><b>Chưa có tài sản phù hợp</b>Thử đổi từ khóa hoặc quay lại sau.</div>'
       );
     }
-    root.innerHTML = `<div class="public-storefront"><header class="storefront-header"><a class="brand" href="?shop=${encodeURIComponent(shopId)}"><i></i>${esc(data.name)}</a><a class="btn sm" href="/">Quản trị / Đăng nhập</a></header><section class="storefront-hero"><span class="eyebrow">TÀI SẢN CHO THUÊ</span><h1>Tìm tài sản phù hợp cho bạn</h1><p>Những tài sản hiện còn sẵn sàng tại ${esc(data.name)}.</p></section><div class="filters"><input type="search" id="public-search" placeholder="Tìm tên tài sản, loại hình…" aria-label="Tìm tài sản"><select id="public-category" aria-label="Loại hình"><option value="all">Tất cả loại hình</option>${[...new Set(assets.map((a) => a.category))].map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join("")}</select></div><div class="grid2" id="public-assets">${cards()}</div><footer>Rentbook · Thông tin khả dụng tại thời điểm tải trang. Vui lòng xác nhận với shop trước khi thuê.</footer></div>`;
+    root.innerHTML = `<div class="public-storefront"><header class="storefront-header"><a class="brand" href="?shop=${encodeURIComponent(shopId)}"><i></i>${esc(data.name)}</a></header><section class="storefront-hero"><span class="eyebrow">TÀI SẢN CHO THUÊ</span><h1>Tìm tài sản phù hợp cho bạn</h1><p>Những tài sản hiện còn sẵn sàng tại ${esc(data.name)}.</p></section><div class="filters"><input type="search" id="public-search" placeholder="Tìm tên tài sản, loại hình…" aria-label="Tìm tài sản"><select id="public-category" aria-label="Loại hình"><option value="all">Tất cả loại hình</option>${[...new Set(assets.map((a) => a.category))].map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join("")}</select></div><div class="grid2" id="public-assets">${cards()}</div><footer>Rentbook · Tự cập nhật mỗi 30 giây. Vui lòng xác nhận với shop trước khi thuê.</footer></div>`;
     root.querySelector("#public-search").oninput = (e) => {
       query = e.target.value;
       root.querySelector("#public-assets").innerHTML = cards();
@@ -82,8 +82,81 @@ export async function renderStorefront(db, shopId) {
       category = e.target.value;
       root.querySelector("#public-assets").innerHTML = cards();
     };
+    let refreshing = false;
+    let imageExpiry = Date.now() + 45 * 60000;
+    const refresh = async () => {
+      if (refreshing || document.hidden) return;
+      refreshing = true;
+      try {
+        const response = await db.rpc("get_public_storefront", {
+          p_shop: shopId,
+        });
+        if (response.error) throw response.error;
+        if (!response.data) {
+          assets = [];
+          root.querySelector("#public-assets").innerHTML =
+            '<div class="empty"><b>Trang trưng bày tạm đóng</b>Vui lòng quay lại sau.</div>';
+          return;
+        }
+        assets = (response.data.assets || []).filter(
+          (a) => Number(a.available) > 0,
+        );
+        if (Date.now() > imageExpiry) {
+          urls.clear();
+          imageExpiry = Date.now() + 45 * 60000;
+        }
+        const paths = assets
+          .map((a) => a.imagePath)
+          .filter(
+            (p) =>
+              typeof p === "string" &&
+              p.startsWith(shopId + "/") &&
+              !urls.has(p),
+          );
+        if (paths.length) {
+          const images = await db.storage
+            .from("asset-images")
+            .createSignedUrls([...new Set(paths)], 3600);
+          for (const item of images.data || [])
+            if (item.signedUrl) urls.set(item.path, item.signedUrl);
+        }
+        const categories = [...new Set(assets.map((a) => a.category))];
+        if (category !== "all" && !categories.includes(category))
+          category = "all";
+        const select = root.querySelector("#public-category");
+        select.innerHTML =
+          '<option value="all">Tất cả loại hình</option>' +
+          categories
+            .map((c) => `<option value="${esc(c)}">${esc(c)}</option>`)
+            .join("");
+        select.value = category;
+        root.querySelector(".storefront-header .brand").innerHTML =
+          "<i></i>" + esc(response.data.name);
+        root.querySelector("#public-assets").innerHTML = cards();
+        root.querySelector("footer").textContent =
+          "Rentbook · Tự cập nhật mỗi 30 giây. Vui lòng xác nhận với shop trước khi thuê.";
+      } catch {
+        root.querySelector("footer").textContent =
+          "Chưa cập nhật được tình trạng mới nhất. Vui lòng tải lại trang hoặc liên hệ shop.";
+      } finally {
+        refreshing = false;
+      }
+    };
+    const interval = setInterval(refresh, 30000);
+    const onVisible = () => {
+      if (!document.hidden) refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener(
+      "pagehide",
+      () => {
+        clearInterval(interval);
+        document.removeEventListener("visibilitychange", onVisible);
+      },
+      { once: true },
+    );
   } catch {
     root.innerHTML =
-      '<div class="storefront-loading"><h1>Chưa tải được trang trưng bày</h1><p>Vui lòng thử lại sau hoặc liên hệ shop.</p><a href="/">Về Rentbook</a></div>';
+      '<div class="storefront-loading"><h1>Chưa tải được trang trưng bày</h1><p>Vui lòng thử lại sau hoặc liên hệ shop.</p></div>';
   }
 }
