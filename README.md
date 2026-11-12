@@ -75,3 +75,13 @@ Chỉ áp dụng giao diện và các thao tác tương thích với mô hình d
 Khi chưa đăng nhập, nút Đăng nhập trên đầu trang đưa focus vào form. Sau đăng nhập, góc phải hiển thị tên shop và Đăng xuất trên cả desktop/mobile. Bấm tên shop để đổi tên hiển thị của tài khoản; giá trị lưu trong Supabase Auth user metadata `shop_name`, chỉ dùng làm nhãn giao diện, không dùng để phân quyền. Khi chưa đặt tên, hiển thị tên organization hiện có. Không cần migration SQL. Đăng xuất xóa trạng thái tài khoản/workspace đang hiển thị và quay lại form.
 
 Kiểm tra giao diện tài khoản: chạy server với cấu hình Supabase ở cổng 5173 rồi `CHROMIUM_PATH=/usr/bin/chromium node tests/account-smoke.mjs`. Bài kiểm tra giả lập API Supabase, không tạo/sửa tài khoản thật và không chứng minh dịch vụ Auth thật hoạt động.
+
+## Ảnh tài sản
+
+Mỗi tài sản có một ảnh, tải lúc tạo hoặc qua nút Thêm ảnh/Đổi ảnh trên thẻ. Hỗ trợ JPG, PNG, WebP tối đa 5 MB, kiểm tra ảnh giải mã được và mỗi chiều không quá 12.000 pixel. Có xem trước và gỡ ảnh. Tài sản cũ không có ảnh vẫn hoạt động.
+
+Trước khi tải ảnh thật: chạy toàn bộ `supabase/migrations/20261112_asset_images.sql` một lần trong SQL Editor của Supabase riêng của ứng dụng. Script tạo bucket PRIVATE asset-images; không chạy lại schema gốc. Đường dẫn object là organization_id/asset_id/random-id.ext. Thành viên cùng shop được đọc; upload/xóa yêu cầu license còn hạn. Ảnh hiển thị qua signed URL hạn một giờ, lấy lại khi tải dữ liệu. Không dùng public URL hoặc service-role key ở frontend.
+
+Ảnh mới chỉ được gắn vào tài sản sau khi upload thành công; nếu lưu records thất bại, ứng dụng thử xóa object mới. Đổi/gỡ ảnh không xóa vĩnh viễn object cũ (tránh làm hỏng dữ liệu tham chiếu/khôi phục); quản trị viên có thể dọn object không còn tham chiếu sau khi kiểm tra. Chế độ demo lưu ảnh dưới dạng data URL trong localStorage, có thể bị giới hạn dung lượng trình duyệt.
+
+Kiểm tra: chạy server demo cổng 5174 rồi `CHROMIUM_PATH=/usr/bin/chromium node tests/asset-images-smoke.mjs`. Kiểm thử demo bao gồm xem trước, thêm/đổi/gỡ, lưu lại sau reload, loại file/kích thước và màn hình mobile. Chính sách Storage và tải ảnh thật vẫn cần kiểm tra trên Supabase sau khi áp dụng migration, với hai shop để xác minh cách ly dữ liệu.

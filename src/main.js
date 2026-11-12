@@ -129,7 +129,135 @@ async function save(next) {
     if (error) throw error;
   } else localStorage.setItem("chothue-demo-v1", JSON.stringify(next));
   state = next;
+  await hydrateImages(next);
   render();
+}
+const imageURLs = new Map();
+const imageTypes = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
+function imageSource(a) {
+  if (a.imagePath)
+    return !db || a.imagePath.startsWith(org.id + "/")
+      ? imageURLs.get(a.imagePath)?.url || ""
+      : "";
+  if (!db && /^data:image\/(png|jpeg|webp);base64,/.test(a.imageData || ""))
+    return a.imageData;
+  return "";
+}
+function assetPhoto(a) {
+  const url = imageSource(a);
+  return `<div class="asset-photo">${url ? `<img src="${esc(url)}" alt="${esc(a.name)}" loading="lazy">` : `<span class="asset-photo-placeholder">${icon("assets")}<span>Chưa có ảnh</span></span>`}</div>`;
+}
+async function hydrateImages(data) {
+  if (!db) return;
+  const paths = [
+    ...new Set(
+      data.assets
+        .map((a) => a.imagePath)
+        .filter(
+          (p) =>
+            typeof p === "string" &&
+            p.startsWith(org.id + "/") &&
+            (!imageURLs.has(p) || imageURLs.get(p).expires < Date.now()),
+        ),
+    ),
+  ];
+  if (!paths.length) return;
+  try {
+    const { data: urls, error } = await db.storage
+      .from("asset-images")
+      .createSignedUrls(paths, 3600);
+    if (error) return;
+    for (const item of urls || [])
+      if (item.signedUrl)
+        imageURLs.set(item.path, {
+          url: item.signedUrl,
+          expires: Date.now() + 45 * 60000,
+        });
+  } catch {}
+}
+async function readImage(file) {
+  if (!file || !file.size) return null;
+  if (!imageTypes[file.type]) throw Error("Chọn ảnh JPG, PNG hoặc WebP.");
+  if (file.size > 5 * 1024 * 1024)
+    throw Error("Ảnh phải nhỏ hơn hoặc bằng 5 MB.");
+  try {
+    const bitmap = await createImageBitmap(file);
+    if (bitmap.width > 12000 || bitmap.height > 12000) {
+      bitmap.close();
+      throw Error("too large");
+    }
+    bitmap.close();
+  } catch {
+    throw Error("Ảnh không hợp lệ hoặc kích thước vượt 12.000 pixel.");
+  }
+  return file;
+}
+function photoField(a = {}) {
+  return `<label>Ảnh tài sản (không bắt buộc)<input name="photo" type="file" accept="image/jpeg,image/png,image/webp"></label><p class="footnote">JPG, PNG hoặc WebP · tối đa 5 MB · mỗi tài sản một ảnh.</p><div class="photo-preview">${imageSource(a) ? `<img src="${esc(imageSource(a))}" alt="Ảnh hiện tại">` : ""}</div>`;
+}
+async function uploadPhoto(file, assetId) {
+  if (!file) return {};
+  if (!db) {
+    const data = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = () => reject(Error("Không đọc được ảnh."));
+      r.readAsDataURL(file);
+    });
+    return { imageData: data };
+  }
+  const path = `${org.id}/${assetId}/${crypto.randomUUID()}.${imageTypes[file.type]}`;
+  const { error } = await db.storage
+    .from("asset-images")
+    .upload(path, file, { contentType: file.type, upsert: false });
+  if (error)
+    throw Error(
+      "Không tải được ảnh. Kiểm tra bucket asset-images, quyền truy cập và key còn hạn. " +
+        error.message,
+    );
+  return { imagePath: path };
+}
+async function commitAssetPhoto(next, file, assetId) {
+  const photo = await uploadPhoto(file, assetId);
+  Object.assign(
+    next.assets.find((a) => a.id === assetId),
+    photo,
+  );
+  try {
+    await save(next);
+  } catch (error) {
+    if (photo.imagePath)
+      await db.storage
+        .from("asset-images")
+        .remove([photo.imagePath])
+        .catch(() => {});
+    throw error;
+  }
+}
+function openAssetPhoto(id) {
+  const asset = state.assets.find((a) => a.id === id);
+  modal(
+    "Ảnh tài sản",
+    `<h3>${esc(asset.name)}</h3>${photoField(asset)}${asset.imagePath || asset.imageData ? '<label class="chk"><input name="removePhoto" type="checkbox">Gỡ ảnh khỏi tài sản</label>' : ""}`,
+    async (d) => {
+      const file = await readImage(d.photo);
+      const next = structuredClone(state),
+        target = next.assets.find((a) => a.id === id);
+      if (d.removePhoto && file)
+        throw Error("Chọn ảnh mới hoặc gỡ ảnh, không chọn cả hai.");
+      if (d.removePhoto) {
+        delete target.imagePath;
+        delete target.imageData;
+        await save(next);
+      } else if (file) {
+        await commitAssetPhoto(next, file, id);
+      } else throw Error("Hãy chọn một ảnh để lưu.");
+    },
+  );
 }
 function table(headers, rows) {
   return `<div class="table-wrap"><table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.length ? rows.join("") : `<tr><td colspan="${headers.length}" class="empty">Chưa có dữ liệu. Thêm mới để bắt đầu quản lý.</td></tr>`}</tbody></table></div>`;
@@ -288,7 +416,7 @@ function content() {
         )
         .map(
           (a) =>
-            `<article class="card acard"><div class="t"><div><h3>${esc(a.name)}</h3><div class="r-sub">${esc(a.category)} · SL ${a.quantity}</div></div><span class="pill ${available(a) > 0 ? "st-ready" : "st-maint"}">${available(a)} sẵn sàng</span></div><div class="pr">${money(a.price)} / ${esc(a.unit)}</div><div class="asset-counts"><span class="chip">Đang thuê <i>${used(a.id)}</i></span><span class="chip">Bảo trì <i>${Number(a.maintenance || 0)}</i></span></div><div class="row-actions"><button class="btn sm" data-maintenance="${a.id}">Bảo trì</button><button class="btn sm" data-rentasset="${a.id}">Cho thuê</button></div></article>`,
+            `<article class="card acard">${assetPhoto(a)}<div class="t"><div><h3>${esc(a.name)}</h3><div class="r-sub">${esc(a.category)} · SL ${a.quantity}</div></div><span class="pill ${available(a) > 0 ? "st-ready" : "st-maint"}">${available(a)} sẵn sàng</span></div><div class="pr">${money(a.price)} / ${esc(a.unit)}</div><div class="asset-counts"><span class="chip">Đang thuê <i>${used(a.id)}</i></span><span class="chip">Bảo trì <i>${Number(a.maintenance || 0)}</i></span></div><div class="row-actions"><button class="btn sm" data-photo="${a.id}">${a.imagePath || a.imageData ? "Đổi ảnh" : "Thêm ảnh"}</button><button class="btn sm" data-maintenance="${a.id}">Bảo trì</button><button class="btn sm" data-rentasset="${a.id}">Cho thuê</button></div></article>`,
         )
         .join("") ||
       '<div class="empty"><b>Không có tài sản phù hợp</b>Thêm tài sản mới hoặc đổi từ khóa tìm kiếm.</div>'
@@ -406,6 +534,7 @@ async function signOut(button) {
     const { error } = await db.auth.signOut();
     if (error) throw error;
     session = null;
+    imageURLs.clear();
     org = null;
     license = null;
     state = { assets: [], customers: [], contracts: [] };
@@ -424,7 +553,7 @@ function render() {
   }
   const title = nav.find((x) => x[0] === view)[2];
   document.querySelector("#app").innerHTML =
-    `<div class="shell"><aside class="side"><div><a class="brand" href="#"><i></i>Rentbook</a><div class="wsname" style="max-width:none;margin-top:6px">${esc(shopName())}</div></div><nav class="snav" aria-label="Điều hướng">${navHTML()}</nav><div class="side-bottom"><div class="sidebar-controls">${session?'<button class="btn sm desktop-signout" data-signout>Đăng xuất</button>':''}<button class="theme-btn btn sm" data-theme-toggle>Đổi sáng / tối</button></div><small>${db ? "Dữ liệu đồng bộ trong không gian riêng của bạn." : "Bản demo. Dữ liệu lưu trong trình duyệt này."}</small></div></aside><div class="content-column"><div class="top"><div class="brand"><i></i>Rentbook</div><div class="wsname">${esc(shopName())}</div><button class="btn sm" data-theme-toggle aria-label="Đổi giao diện sáng tối">◐</button></div><main class="main">${accountHeader()}<div class="head page-title"><div><h1>${view === "overview" ? "Hôm nay" : title}</h1><p>${view === "overview" ? new Date().toLocaleDateString("vi-VN", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : view === "calendar" ? "Theo dõi ngày giao và hẹn trả của từng đơn thuê." : view === "assets" ? `${state.assets.length} tài sản · Danh mục theo ngành kinh doanh` : view === "customers" ? `${state.customers.length} khách hàng` : "Theo dõi đầy đủ tài sản, tiền thuê và tiền cọc."}</p></div>${["overview", "assets", "customers", "contracts"].includes(view) ? `<button class="btn pri primary" data-add="${{ overview: "contract", assets: "asset", customers: "customer", contracts: "contract" }[view]}">＋ ${view === "assets" ? "Thêm tài sản" : view === "customers" ? "Thêm khách thuê" : "Tạo đơn thuê"}</button>` : ""}</div>${!db ? '<div class="demo-banner">Bản demo · Dữ liệu lưu trên trình duyệt này.</div>' : ""}${["assets", "customers", "contracts"].includes(view) ? `<div class="filters search-bar"><input id="search" class="search" type="search" placeholder="Tìm kiếm theo tên${view === "contracts" ? " hoặc mã đơn" : ""}…" value="${esc(search)}"></div>` : ""}<div id="content">${content()}</div><footer>Rentbook · Quản lý cho thuê đa ngành</footer></main></div></div><nav class="tabs" aria-label="Điều hướng di động">${navHTML()}</nav><dialog id="modal"></dialog><div id="toast" role="status"></div>`;
+    `<div class="shell"><aside class="side"><div><a class="brand" href="#"><i></i>Rentbook</a><div class="wsname" style="max-width:none;margin-top:6px">${esc(shopName())}</div></div><nav class="snav" aria-label="Điều hướng">${navHTML()}</nav><div class="side-bottom"><div class="sidebar-controls">${session ? '<button class="btn sm desktop-signout" data-signout>Đăng xuất</button>' : ""}<button class="theme-btn btn sm" data-theme-toggle>Đổi sáng / tối</button></div><small>${db ? "Dữ liệu đồng bộ trong không gian riêng của bạn." : "Bản demo. Dữ liệu lưu trong trình duyệt này."}</small></div></aside><div class="content-column"><div class="top"><div class="brand"><i></i>Rentbook</div><div class="wsname">${esc(shopName())}</div><button class="btn sm" data-theme-toggle aria-label="Đổi giao diện sáng tối">◐</button></div><main class="main">${accountHeader()}<div class="head page-title"><div><h1>${view === "overview" ? "Hôm nay" : title}</h1><p>${view === "overview" ? new Date().toLocaleDateString("vi-VN", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : view === "calendar" ? "Theo dõi ngày giao và hẹn trả của từng đơn thuê." : view === "assets" ? `${state.assets.length} tài sản · Danh mục theo ngành kinh doanh` : view === "customers" ? `${state.customers.length} khách hàng` : "Theo dõi đầy đủ tài sản, tiền thuê và tiền cọc."}</p></div>${["overview", "assets", "customers", "contracts"].includes(view) ? `<button class="btn pri primary" data-add="${{ overview: "contract", assets: "asset", customers: "customer", contracts: "contract" }[view]}">＋ ${view === "assets" ? "Thêm tài sản" : view === "customers" ? "Thêm khách thuê" : "Tạo đơn thuê"}</button>` : ""}</div>${!db ? '<div class="demo-banner">Bản demo · Dữ liệu lưu trên trình duyệt này.</div>' : ""}${["assets", "customers", "contracts"].includes(view) ? `<div class="filters search-bar"><input id="search" class="search" type="search" placeholder="Tìm kiếm theo tên${view === "contracts" ? " hoặc mã đơn" : ""}…" value="${esc(search)}"></div>` : ""}<div id="content">${content()}</div><footer>Rentbook · Quản lý cho thuê đa ngành</footer></main></div></div><nav class="tabs" aria-label="Điều hướng di động">${navHTML()}</nav><dialog id="modal"></dialog><div id="toast" role="status"></div>`;
   bind();
 }
 function bind() {
@@ -474,6 +603,7 @@ function bind() {
     else if (d.pay) openPayment(d.pay);
     else if (d.refund) openRefund(d.refund);
     else if (d.detail) openDetail(d.detail);
+    else if (d.photo) openAssetPhoto(d.photo);
     else if (d.maintenance) openMaintenance(d.maintenance);
     else if (d.filter) {
       contractFilter = d.filter;
@@ -542,22 +672,53 @@ function modal(title, body, onSubmit) {
       btn.disabled = false;
     }
   };
+  const photoInput = el.querySelector("[name=photo]");
+  let previewURL;
+  photoInput?.addEventListener("change", async () => {
+    if (previewURL) URL.revokeObjectURL(previewURL);
+    const preview = el.querySelector(".photo-preview");
+    preview.replaceChildren();
+    try {
+      const file = await readImage(photoInput.files[0]);
+      el.querySelector("#form-error").textContent = "";
+      if (file) {
+        previewURL = URL.createObjectURL(file);
+        const image = document.createElement("img");
+        image.src = previewURL;
+        image.alt = "Xem trước ảnh tài sản";
+        preview.append(image);
+      }
+    } catch (error) {
+      el.querySelector("#form-error").textContent = error.message;
+      photoInput.value = "";
+    }
+  });
+  el.addEventListener(
+    "close",
+    () => {
+      if (previewURL) URL.revokeObjectURL(previewURL);
+    },
+    { once: true },
+  );
   el.showModal();
 }
 function openForm(type) {
   if (type === "asset")
     modal(
       "Thêm tài sản / sản phẩm",
-      `${input("Tên tài sản", "name")}${input("Danh mục (tự đặt)", "category", "text", 'list="categories"')}<datalist id="categories">${["Phương tiện", "Thiết bị", "Bất động sản", "Thời trang", "Sự kiện", "Công cụ"].map((c) => `<option>${c}</option>`).join("")}</datalist><div class="form-grid">${input("Số lượng", "quantity", "number", 'min="1" step="1"')}${input("Đơn giá (₫)", "price", "number", 'min="0" step="1000"')}</div><label>Đơn vị tính<select name="unit"><option>giờ</option><option selected>ngày</option><option>tuần</option><option>tháng</option><option>lượt</option></select></label>`,
+      `${input("Tên tài sản", "name")}${input("Danh mục (tự đặt)", "category", "text", 'list="categories"')}<datalist id="categories">${["Phương tiện", "Thiết bị", "Bất động sản", "Thời trang", "Sự kiện", "Công cụ"].map((c) => `<option>${c}</option>`).join("")}</datalist><div class="form-grid">${input("Số lượng", "quantity", "number", 'min="1" step="1"')}${input("Đơn giá (₫)", "price", "number", 'min="0" step="1000"')}</div><label>Đơn vị tính<select name="unit"><option>giờ</option><option selected>ngày</option><option>tuần</option><option>tháng</option><option>lượt</option></select></label>${photoField()}`,
       async (d) => {
+        const file = await readImage(d.photo);
+        const { photo, ...fields } = d;
         const next = structuredClone(state);
+        const id = crypto.randomUUID();
         next.assets.push({
-          ...d,
-          id: crypto.randomUUID(),
+          ...fields,
+          id,
           quantity: Number(d.quantity),
           price: Number(d.price),
         });
-        await save(next);
+        await commitAssetPhoto(next, file, id);
       },
     );
   if (type === "customer")
@@ -772,6 +933,7 @@ async function load() {
   org = o.data;
   state = r.data?.data || { assets: [], customers: [], contracts: [] };
   license = l.data;
+  await hydrateImages(state);
 }
 try {
   const theme = localStorage.getItem("rentbook-theme");
