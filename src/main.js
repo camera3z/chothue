@@ -325,6 +325,11 @@ function revenueChart(months) {
   const max = Math.max(1, ...months.map((m) => m.value));
   return `<div class="revenue-chart" role="img" aria-label="Tiền thuê đã thu trong sáu tháng: ${months.map((m) => m.label + ": " + money(m.value)).join("; ")}">${months.map((m, i) => `<div class="chart-column"><span class="chart-value">${m.value ? money(m.value) : "0"}</span><div class="chart-track"><i class="${i === 5 ? "current" : ""}" style="height:${m.value ? Math.max(2, (m.value / max) * 100) : 0}%"></i></div><small>${m.label}</small></div>`).join("")}</div>`;
 }
+let overviewPending = [],
+  overviewPendingCount = 0;
+function pendingOverview() {
+  return `<section class="card" id="overview-requests"><div class="panel-title"><h2>Yêu cầu thuê chờ duyệt <span class="pill request-status-pending">${overviewPendingCount}</span></h2><button class="btn sm" data-refresh-requests aria-label="Làm mới yêu cầu thuê">Làm mới</button></div><div class="list">${bookingRequestsError ? '<div class="empty">Chưa tải được yêu cầu. Vui lòng bấm Làm mới.</div>' : overviewPending.length ? overviewPending.map((r) => `<div class="row"><span><span class="r-top"><b>${esc(r.customer_name)}</b><span class="pill request-status-pending">Chờ duyệt</span></span><span class="r-sub">${esc(assetName(r.asset_id))} × ${r.quantity}</span><span class="r-sub">${esc(r.phone)} · ${esc(new Date(r.starts_at).toLocaleString("vi-VN"))}</span></span><button class="btn sm pri" data-review-request="${r.id}">Xem xét</button></div>`).join("") : '<div class="empty"><b>Chưa có yêu cầu chờ duyệt</b>Yêu cầu mới từ trang khách sẽ xuất hiện ở đây sau khi làm mới.</div>'}</div><button class="text-btn" data-view="requests">Xem tất cả yêu cầu →</button></section>`;
+}
 function overview() {
   const renting = state.contracts.filter(active),
     late = renting.filter(overdue),
@@ -361,7 +366,7 @@ function overview() {
     )
     .join(
       "",
-    )}</div><div class="cols"><section class="card"><h2>Việc cần xử lý</h2><div class="list">${[...late, ...due].length ? [...late, ...due].map((c) => `<div class="row"><span><span class="r-top"><span class="pill ${overdue(c) ? "st-late" : "st-out"}">${overdue(c) ? "Quá hạn" : "Hẹn trả hôm nay"}</span><b>${esc(c.agreedCustomerName || customerName(c.customerId))}</b></span><span class="r-sub">${esc(assetName(c.assetId))} × ${c.quantity} · <button class="btn sm" data-detail="${c.id}">${esc(c.code)}</button></span><span class="r-sub">${overdue(c) ? "Quá hạn từ" : "Hẹn trả"} ${dateLabel(c.end)}</span></span><span class="r-end"><button class="btn sm pri" data-return="${c.id}">Nhận trả</button></span></div>`).join("") : '<div class="empty"><b>Hôm nay không có việc tồn đọng</b>Không có đơn quá hạn hoặc hẹn trả trong ngày.</div>'}</div></section><div class="stack"><section class="card"><h2>Tiền thuê đã thu · 6 tháng</h2>${revenueChart(months)}<p class="footnote">Theo nhật ký thu tiền, không bao gồm tiền cọc. Khoản thu cũ chưa có ngày ghi nhận không được đưa vào biểu đồ.</p></section><section class="card"><h2>Thu tiền theo loại hình · 6 tháng</h2>${
+    )}</div><div class="cols"><div class="stack"><section class="card"><h2>Việc cần xử lý</h2><div class="list">${[...late, ...due].length ? [...late, ...due].map((c) => `<div class="row"><span><span class="r-top"><span class="pill ${overdue(c) ? "st-late" : "st-out"}">${overdue(c) ? "Quá hạn" : "Hẹn trả hôm nay"}</span><b>${esc(c.agreedCustomerName || customerName(c.customerId))}</b></span><span class="r-sub">${esc(assetName(c.assetId))} × ${c.quantity} · <button class="btn sm" data-detail="${c.id}">${esc(c.code)}</button></span><span class="r-sub">${overdue(c) ? "Quá hạn từ" : "Hẹn trả"} ${dateLabel(c.end)}</span></span><span class="r-end"><button class="btn sm pri" data-return="${c.id}">Nhận trả</button></span></div>`).join("") : '<div class="empty"><b>Hôm nay không có việc tồn đọng</b>Không có đơn quá hạn hoặc hẹn trả trong ngày.</div>'}</div></section>${pendingOverview()}</div><div class="stack"><section class="card"><h2>Tiền thuê đã thu · 6 tháng</h2>${revenueChart(months)}<p class="footnote">Theo nhật ký thu tiền, không bao gồm tiền cọc. Khoản thu cũ chưa có ngày ghi nhận không được đưa vào biểu đồ.</p></section><section class="card"><h2>Thu tiền theo loại hình · 6 tháng</h2>${
     Object.keys(categories).length
       ? Object.entries(categories)
           .sort((a, b) => b[1] - a[1])
@@ -1152,6 +1157,21 @@ async function load() {
     .limit(requestLimit);
   bookingRequests = Array.isArray(requests.data) ? requests.data : [];
   bookingRequestsError = requests.error?.message || "";
+  const pending = await db
+    .from("rental_requests")
+    .select("*", { count: "exact" })
+    .eq("organization_id", id)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false })
+    .limit(5);
+  overviewPending = Array.isArray(pending.data)
+    ? pending.data.filter((r) => r.status === "pending")
+    : [];
+  overviewPendingCount = pending.count ?? overviewPending.length;
+  bookingRequestsError ||= pending.error?.message || "";
+  for (const r of overviewPending)
+    if (!bookingRequests.some((x) => x.id === r.id)) bookingRequests.push(r);
+
   const storefront = await db
     .from("storefronts")
     .select("*")

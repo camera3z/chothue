@@ -72,9 +72,16 @@ try {
   await page.locator("[name=name]").fill("Khách thử nghiệm");
   await page.locator("[name=phone]").fill("0901234567");
   await page.locator("[name=consent]").check();
-  await page.setViewportSize({width:390,height:844});
-  assert(await page.locator('.booking-request-dialog').evaluate(e=>e.scrollWidth<=e.clientWidth));
-  await page.screenshot({path:'/tmp/rentbook-booking-mobile.png',fullPage:true});
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert(
+    await page
+      .locator(".booking-request-dialog")
+      .evaluate((e) => e.scrollWidth <= e.clientWidth),
+  );
+  await page.screenshot({
+    path: "/tmp/rentbook-booking-mobile.png",
+    fullPage: true,
+  });
 
   await page
     .getByRole("button", { name: "Gửi yêu cầu thuê", exact: true })
@@ -219,14 +226,19 @@ try {
     { user, jwt },
   );
   await admin.goto(base);
-  await admin.locator(".snav [data-view=requests]").click();
-  await admin.getByRole("button", { name: "Xem xét", exact: true }).click();
+  await admin
+    .locator("#overview-requests")
+    .getByRole("button", { name: "Xem xét", exact: true })
+    .click();
   await admin.locator("#modal [name=total]").fill("350000");
   await admin.locator("#modal [name=deposit]").fill("500000");
   await admin
     .getByRole("button", { name: "Lưu quyết định", exact: true })
     .click();
-  await admin.getByRole("button", { name: "Chi tiết", exact: true }).waitFor();
+  await admin
+    .locator("#overview-requests")
+    .getByText("Chưa có yêu cầu chờ duyệt", { exact: true })
+    .waitFor();
   assert.equal(reviewed.p_total, 350000);
   assert.equal(reviewed.p_deposit, 500000);
   await admin.locator(".snav [data-view=contracts]").click();
