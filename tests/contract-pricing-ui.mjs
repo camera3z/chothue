@@ -28,8 +28,8 @@ try {
 
   await page.locator("[name=billingUnit]").selectOption("ngày");
   await page.locator('[name=end]').fill('2026-11-25');
-  assert((await page.locator('#contract-price-summary').innerText()).includes('Số ngày đã thuê: 12'));
-  assert((await page.locator('.contract-formula').innerText()).startsWith('Số ngày đã thuê: 12 × Đơn giá:'));
+  assert((await page.locator('#contract-price-summary').innerText()).includes('12 ngày × 100.000đ'));
+  assert((await page.locator('.contract-formula').innerText()).startsWith('12 ngày × 100.000đ ='));
   await page.locator('[name=end]').fill('2026-11-22');
   await page.locator("[name=quantity]").fill("2");
   assert(
