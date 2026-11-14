@@ -1331,7 +1331,18 @@ function init() {
   let userId = null;
   db.auth.onAuthStateChange((event, s) => {
     session = s;
-    if (s && s.user.id === userId && event === "TOKEN_REFRESHED") return;
+    // Supabase also emits SIGNED_IN when an existing session is recovered
+    // (for example after switching tabs). Updating credentials must not rebuild
+    // the app or discard an open form, selected files, or a stale-save revision.
+    if (s && s.user.id === userId) {
+      document.querySelectorAll(".shop-label, .wsname").forEach((el) => {
+        el.textContent = shopName();
+      });
+      document.querySelectorAll(".shop-avatar").forEach((el) => {
+        el.textContent = shopName().trim().slice(0, 1).toUpperCase();
+      });
+      return;
+    }
     userId = s?.user.id || null;
     setTimeout(async () => {
       try {

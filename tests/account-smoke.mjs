@@ -104,6 +104,38 @@ try {
     .locator(".account-header .shop-label")
     .getByText("Shop thử nghiệm", { exact: true })
     .waitFor();
+  // Recovered/refreshed sessions must not remount the app or reload records.
+  await page.locator('.snav [data-view="assets"]').click();
+  await page.locator('[data-add="asset"]').click();
+  await page.locator('#modal [name="name"]').fill("Tài sản đang nhập");
+  await page.locator('#modal [name="category"]').fill("Danh mục thử");
+  await page.locator('#modal [name="photo"]').setInputFiles({
+    name: "asset.png", mimeType: "image/png",
+    buffer: await page.screenshot({ clip: { x: 0, y: 0, width: 40, height: 40 } }),
+  });
+  await page.locator('.photo-preview img').waitFor();
+  let backgroundReads = 0;
+  const countReads = (r) => { if (r.url().includes('/rest/v1/')) backgroundReads++; };
+  page.on('request', countReads);
+  for (const event of ["SIGNED_IN", "TOKEN_REFRESHED", "USER_UPDATED"]) {
+    const label = "Shop cập nhật " + event;
+    await page.evaluate(({ key, event, label }) => {
+      const session = JSON.parse(localStorage.getItem(key));
+      session.user.user_metadata.shop_name = label;
+      const channel = new BroadcastChannel(key);
+      channel.postMessage({event, session});
+      channel.close();
+    }, { key: projectHost, event, label });
+    await page.locator('.account-header .shop-label').getByText(label, { exact: true }).waitFor();
+    assert(await page.locator('#modal').evaluate(el => el.open));
+    assert.equal(await page.locator('#modal [name="name"]').inputValue(), "Tài sản đang nhập");
+    assert.equal(await page.locator('#modal [name="category"]').inputValue(), "Danh mục thử");
+    assert.equal(await page.locator('#modal [name="photo"]').evaluate(el => el.files[0].name), "asset.png");
+    assert.equal(await page.locator('.photo-preview img').count(), 1);
+  }
+  assert.equal(backgroundReads, 0, "Session events must not reload workspace data");
+  page.off('request', countReads);
+  await page.locator('#modal #cancel').click();
   await page.locator("[data-shop-name]").click();
   await page.locator("#modal [name=name]").fill("Shop mới <an toàn>");
   for (const theme of ['light','dark']) {
