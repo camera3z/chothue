@@ -1,4 +1,5 @@
 import "./style.css";
+import { rentalQuote } from "./rental-pricing.js";
 import { localInput } from "./booking-request.js";
 import { renderStorefront } from "./storefront.js";
 import { createClient } from "@supabase/supabase-js";
@@ -736,7 +737,10 @@ function bind() {
     if (d.rentasset) {
       openForm("contract");
       const select = document.querySelector("#modal [name=assetId]");
-      if (select) select.value = d.rentasset;
+      if (select) {
+        select.value = d.rentasset;
+        select.dispatchEvent(new Event("change"));
+      }
       return;
     }
     if (b.hasAttribute("data-more-requests")) {
@@ -947,14 +951,20 @@ function openForm(type) {
       return toast("Hãy thêm tài sản và khách thuê trước.");
     modal(
       "Tạo hợp đồng",
-      `<label>Khách thuê<select name="customerId">${state.customers.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select></label><label>Tài sản<select name="assetId">${state.assets.map((a) => `<option value="${a.id}" ${available(a) < 1 ? "disabled" : ""}>${esc(a.name)} · Còn ${available(a)}</option>`).join("")}</select></label><div class="form-grid">${input("Ngày bắt đầu", "start", "date", `value="${today()}"`)}${input("Ngày kết thúc", "end", "date", `value="${today()}"`)}</div><div class="form-grid">${input("Số lượng", "quantity", "number", 'value="1" min="1" step="1"')}${input("Số đơn vị tính tiền", "periods", "number", 'value="1" min="1" step="1"')}</div><p class="footnote">Tổng tiền = đơn giá tài sản × số lượng × số đơn vị tính tiền. Với tháng, giờ hoặc lượt, nhập số đơn vị theo thỏa thuận.</p>${input("Tiền thuê đã thu (₫)", "paid", "number", 'value="0" min="0" step="1000"')}${input("Tiền cọc đã nhận (₫)", "deposit", "number", 'value="0" min="0" step="1000"')}<label>Ghi chú bàn giao<textarea name="handoverNote" placeholder="Phụ kiện đi kèm, tình trạng tài sản, địa chỉ giao…"></textarea></label>`,
+      `<label>Khách thuê<select name="customerId">${state.customers.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select></label><label>Tài sản<select name="assetId">${state.assets.map((a) => `<option value="${a.id}" ${available(a) < 1 ? "disabled" : ""}>${esc(a.name)} · Còn ${available(a)}</option>`).join("")}</select></label><div class="form-grid">${input("Ngày bắt đầu", "start", "date", `value="${today()}"`)}${input("Ngày kết thúc", "end", "date", `value="${today()}"`)}</div>${input("Số lượng tài sản", "quantity", "number", 'value="1" min="1" max="10000" step="1"')}<div class="form-grid">${input("Đơn giá thỏa thuận (₫)", "unitPrice", "number", 'value="0" min="0" max="100000000000" step="1"')}<label>Tính theo<select name="billingUnit"><option>ngày</option><option>tháng</option><option>năm</option></select></label></div><div class="summary-box" id="contract-price-summary" role="status"></div><p class="footnote">Tính cả ngày kết thúc. Ngày tính theo số ngày; tháng/năm làm tròn lên theo chu kỳ lịch từ ngày bắt đầu (ngày cuối tháng được điều chỉnh phù hợp). Đơn giá này chỉ áp dụng cho hợp đồng, không thay giá tài sản.</p>${input("Tiền thuê đã thu (₫)", "paid", "number", 'value="0" min="0" step="1000"')}${input("Tiền cọc đã nhận (₫)", "deposit", "number", 'value="0" min="0" step="1000"')}<label>Ghi chú bàn giao<textarea name="handoverNote" placeholder="Phụ kiện đi kèm, tình trạng tài sản, địa chỉ giao…"></textarea></label>`,
       async (d) => {
         if (d.end < d.start)
           throw Error("Ngày kết thúc phải từ ngày bắt đầu trở đi.");
         const a = state.assets.find((a) => a.id === d.assetId);
         if (!a || Number(d.quantity) > available(a))
           throw Error("Số lượng khả dụng không đủ.");
-        const total = Number(a.price) * Number(d.quantity) * Number(d.periods);
+        const { total, periods } = rentalQuote(
+          d.start,
+          d.end,
+          d.billingUnit,
+          Number(d.unitPrice),
+          Number(d.quantity),
+        );
         if (Number(d.paid) > total)
           throw Error("Tiền đã thu không được vượt tổng hợp đồng.");
         const n = structuredClone(state);
@@ -963,6 +973,9 @@ function openForm(type) {
           id: crypto.randomUUID(),
           code: "HĐ-" + String(n.contracts.length + 1).padStart(4, "0"),
           quantity: Number(d.quantity),
+          unitPrice: Number(d.unitPrice),
+          billingUnit: d.billingUnit,
+          periods,
           total,
           paid: Number(d.paid),
           deposit: Number(d.deposit || 0),
@@ -986,7 +999,50 @@ function openForm(type) {
         await save(n);
       },
     );
+    bindContractPricing();
   }
+}
+function bindContractPricing() {
+  const form = document.querySelector("#modal form");
+  const summary = form.querySelector("#contract-price-summary");
+  const update = () => {
+    try {
+      const d = Object.fromEntries(new FormData(form));
+      const q = rentalQuote(
+        d.start,
+        d.end,
+        d.billingUnit,
+        Number(d.unitPrice),
+        Number(d.quantity),
+      );
+      summary.textContent = `${money(Number(d.unitPrice))} / ${d.billingUnit} × ${d.quantity} tài sản × ${q.periods} ${d.billingUnit} = ${money(q.total)}`;
+    } catch (e) {
+      summary.textContent = e.message;
+    }
+  };
+  form.querySelector("[name=assetId]").addEventListener("change", (e) => {
+    const a = state.assets.find((a) => a.id === e.target.value);
+    if (a) {
+      form.querySelector("[name=unitPrice]").value = [
+        "ngày",
+        "tháng",
+        "năm",
+      ].includes(a.unit)
+        ? a.price
+        : 0;
+      form.querySelector("[name=billingUnit]").value = [
+        "ngày",
+        "tháng",
+        "năm",
+      ].includes(a.unit)
+        ? a.unit
+        : "ngày";
+    }
+    update();
+  });
+  form.addEventListener("input", update);
+  form.addEventListener("change", update);
+  form.querySelector("[name=assetId]").dispatchEvent(new Event("change"));
 }
 function openPayment(id) {
   const c = state.contracts.find((c) => c.id === id);
@@ -1086,7 +1142,7 @@ function openRefund(id) {
 function openDetail(id) {
   const c = state.contracts.find((x) => x.id === id);
   const el = document.querySelector("#modal");
-  el.innerHTML = `<div class="modal-title"><div><span class="eyebrow">HỒ SƠ CHO THUÊ</span><h2>${esc(c.code)}</h2></div><button id="close" aria-label="Đóng">×</button></div><div class="summary-box"><h3>${esc(assetName(c.assetId))}</h3><p>${esc(c.agreedCustomerName || customerName(c.customerId))} · ${c.quantity} đơn vị</p><p>Giao ${dateLabel(c.start)} → Hẹn trả ${dateLabel(c.end)}</p></div><div class="detail-money"><div>Tiền thuê<strong>${money(c.total)}</strong></div><div>Đã thu<strong>${money(c.paid)}</strong></div><div>Cọc đang giữ<strong>${money(held(c))}</strong></div></div><p class="footnote">${c.rentalStart ? `Thời gian: ${esc(new Date(c.rentalStart).toLocaleString("vi-VN"))} → ${esc(new Date(c.rentalEnd).toLocaleString("vi-VN"))}` : ""} · Cọc thỏa thuận ${money(c.depositRequired || 0)}</p><h3>Ghi chú bàn giao</h3><p class="note-text">${esc(c.handoverNote || "Chưa có ghi chú")}</p><h3>Ghi chú nhận trả</h3><p class="note-text">${esc(c.returnNote || "Chưa nhận trả")}</p><h3>Lịch sử thu · hoàn tiền</h3>${
+  el.innerHTML = `<div class="modal-title"><div><span class="eyebrow">HỒ SƠ CHO THUÊ</span><h2>${esc(c.code)}</h2></div><button id="close" aria-label="Đóng">×</button></div><div class="summary-box"><h3>${esc(assetName(c.assetId))}</h3><p>${esc(c.agreedCustomerName || customerName(c.customerId))} · ${c.quantity} đơn vị</p><p>Giao ${dateLabel(c.start)} → Hẹn trả ${dateLabel(c.end)}</p></div><div class="detail-money"><div>Tiền thuê<strong>${money(c.total)}</strong></div><div>Đã thu<strong>${money(c.paid)}</strong></div><div>Cọc đang giữ<strong>${money(held(c))}</strong></div></div><p class="footnote">${c.rentalStart ? `Thời gian: ${esc(new Date(c.rentalStart).toLocaleString("vi-VN"))} → ${esc(new Date(c.rentalEnd).toLocaleString("vi-VN"))}` : ""} · Cọc thỏa thuận ${money(c.depositRequired || 0)}</p><p class="footnote">${c.billingUnit ? `Đơn giá hợp đồng: ${money(c.unitPrice)} / ${esc(c.billingUnit)} · ${c.periods} ${esc(c.billingUnit)}` : ""}</p><h3>Ghi chú bàn giao</h3><p class="note-text">${esc(c.handoverNote || "Chưa có ghi chú")}</p><h3>Ghi chú nhận trả</h3><p class="note-text">${esc(c.returnNote || "Chưa nhận trả")}</p><h3>Lịch sử thu · hoàn tiền</h3>${
     (c.transactions || []).length
       ? table(
           ["Ngày", "Loại", "Số tiền"],

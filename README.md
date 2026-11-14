@@ -35,7 +35,7 @@ Kiểm tra thủ công: tạo tài sản và khách thuê; lập hợp đồng; 
 
 ## Phạm vi bản đầu
 
-Có ảnh tài sản, đặt thuê công khai chờ duyệt và giữ chỗ theo thời gian sau khi duyệt. Đơn thủ công vẫn nhập số đơn vị tính tiền; đơn web có giá dự kiến và giá thỏa thuận cuối cùng. Thanh toán được ghi nhận thủ công; chưa tích hợp bán key tự động, hóa đơn, cổng thanh toán, đơn vị giao nhận, mã từng món, phí trễ hạn tự động hoặc khấu hao.
+Có ảnh tài sản, đặt thuê công khai chờ duyệt và giữ chỗ theo thời gian sau khi duyệt. Đơn thủ công nhập đơn giá riêng theo ngày/tháng/năm và tự tính số kỳ; đơn web có giá dự kiến và giá thỏa thuận cuối cùng. Thanh toán được ghi nhận thủ công; chưa tích hợp bán key tự động, hóa đơn, cổng thanh toán, đơn vị giao nhận, mã từng món, phí trễ hạn tự động hoặc khấu hao.
 
 Dữ liệu MVP lưu một JSON document cho mỗi workspace, yêu cầu đặt thuê ở bảng riêng. Sau migration đặt thuê, RPC khóa dòng và kiểm tra version để chống ghi đè khi có nhiều phiên; tab cũ phải tải lại khi phiên bản đổi. Nhật ký thu/hoàn được lưu trong hợp đồng. Tách bảng giao dịch độc lập vẫn cần thiết khi quy mô dữ liệu lớn. Người mua có thể sửa dữ liệu workspace của mình qua API nhưng không thể tự cấp bản quyền hoặc truy cập workspace khác. Cần bổ sung rate limiting cho RPC kích hoạt key trước khi mở bán công khai.
 
@@ -116,3 +116,9 @@ Trang khách không còn nút/link quản trị hoặc đăng nhập. Danh mục
 **Chống spam cơ bản:** honeypot, giới hạn input, UUID idempotency, tối đa 3 yêu cầu/SĐT/shop/giờ và 100 yêu cầu/shop/giờ (bao gồm đơn đã hủy/từ chối). Đây không thay thế CAPTCHA/IP rate limit tại gateway; khi mở bán rộng nên tích hợp CAPTCHA có xác minh server. Yêu cầu chỉ gửi trong 2 năm tới, thời lượng tối đa 366 ngày, tối đa 10.000 đơn vị/yêu cầu. Giới hạn chống spam theo shop có thể làm chậm nhận yêu cầu khi lưu lượng tăng; không coi đây là chống bot hoàn chỉnh.
 
 Kiểm tra SQL local: `node tests/booking-sql.mjs` dùng migration thật trong PGlite với các schema Supabase tối thiểu; kiểm tra quyền, validation, quota, idempotency, duyệt/trùng lịch, biên nối tiếp, hủy bằng token, phiên bản cũ, giao/trả và bảo trì. `CHROMIUM_PATH=/usr/bin/chromium node tests/booking-ui.mjs` với server Supabase-configured tại cổng 5173 kiểm tra UI qua API giả lập. Cần kiểm tra tích hợp lại trên Supabase thật sau khi áp dụng SQL; chưa có kiểm thử nhiều kết nối PostgreSQL production đồng thời.
+
+## Đơn giá riêng khi tạo hợp đồng thủ công
+
+Form Tạo hợp đồng thay ô Số đơn vị tính tiền bằng Đơn giá thỏa thuận và lựa chọn ngày/tháng/năm. Tự tính số kỳ và tổng tiền = đơn giá nhập × số tài sản × số kỳ, hiển thị ngay trước khi lưu. Tính cả ngày cuối; tháng/năm theo chu kỳ lịch từ ngày bắt đầu, làm tròn kỳ lẻ lên và điều chỉnh ngày cuối tháng (ví dụ 01/01–31/01 là một tháng; 01/01–01/02 là hai kỳ vì tính cả ngày 01/02). Đơn giá mặc định lấy từ tài sản nếu đơn vị phù hợp; với đơn vị giờ/tuần/lượt cũ phải nhập lại giá theo ngày/tháng/năm. Chọn đơn vị mới không tự quy đổi tiền.
+
+Lưu snapshot `unitPrice`, `billingUnit`, `periods` trên hợp đồng, không thay đơn giá tài sản hoặc tổng tiền của hợp đồng cũ. Thay đổi này không sửa giá dự kiến ở form đặt thuê công khai và không thay giới hạn thời lượng ở server. Không cần migration SQL. Kiểm tra công thức: `node tests/rental-pricing.mjs`; kiểm tra form demo: `CHROMIUM_PATH=/usr/bin/chromium node tests/contract-pricing-ui.mjs` (server demo cổng 5174).
