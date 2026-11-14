@@ -14,6 +14,7 @@ try {
   const url = process.env.AUTH_TEST_URL || "http://127.0.0.1:5173";
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  await page.clock.install();
   await page.goto(url);
   await page.locator(".auth-page-header [data-login]").waitFor();
   assert.equal(await page.locator("[data-signout]").count(), 0);
@@ -33,6 +34,8 @@ try {
     user_metadata: { shop_name: "Shop thử nghiệm" },
   };
   let logout = false;
+  let incomingRequests = [];
+  let recordsReads = 0;
   const projectHost =
     (await page.evaluate(() =>
       Object.keys(localStorage).find((k) => k.includes("auth-token")),
@@ -61,11 +64,14 @@ try {
       data = [{ organization_id: oid }];
     else if (u.pathname.endsWith("/organizations"))
       data = { id: oid, name: "Đơn vị mặc định" };
-    else if (u.pathname.endsWith("/records"))
+    else if (u.pathname.endsWith("/records")) {
+      recordsReads++;
       data = {
         organization_id: oid,
         data: { assets: [], customers: [], contracts: [] },
       };
+    } else if (u.pathname.endsWith("/rental_requests"))
+      data = incomingRequests;
     else if (u.pathname.endsWith("/licenses"))
       data = { organization_id: oid, expires_at: "2099-01-01T00:00:00Z" };
     await route.fulfill({
@@ -136,6 +142,27 @@ try {
   assert.equal(backgroundReads, 0, "Session events must not reload workspace data");
   page.off('request', countReads);
   await page.locator('#modal #cancel').click();
+  await page.locator('.snav [data-view="overview"]').click();
+  await page.locator('[data-shop-name]').click();
+  await page.locator('#modal [name="name"]').fill("Bản nháp giữ nguyên");
+  const initialRecordsReads = recordsReads;
+  incomingRequests = [{
+    id: "33333333-3333-4333-8333-333333333333", asset_id: "a1",
+    customer_name: "Khách mới tự cập nhật", phone: "0901234567", quantity: 1,
+    starts_at: new Date().toISOString(), ends_at: new Date().toISOString(),
+    status: "pending", estimated_total: 300000,
+  }];
+  await page.clock.fastForward(15000);
+  await page.locator('#overview-requests').getByText("Khách mới tự cập nhật", { exact: true }).waitFor();
+  assert.equal(await page.locator('#modal [name="name"]').inputValue(), "Bản nháp giữ nguyên");
+  assert(await page.locator('#modal').evaluate(el => el.open));
+  assert.equal(recordsReads, initialRecordsReads, "Polling must not fetch records or change form revision");
+  await page.locator('#modal #cancel').click();
+  await page.locator('.snav [data-view="requests"]').click();
+  incomingRequests = [{ ...incomingRequests[0], customer_name: "Khách đã đổi", status: "cancelled" }];
+  await page.clock.fastForward(15000);
+  await page.locator('#content').getByText("Khách đã đổi", { exact: true }).waitFor();
+  assert.equal(await page.locator('#content').getByText("Đã hủy", { exact: true }).count(), 1);
   await page.locator("[data-shop-name]").click();
   await page.locator("#modal [name=name]").fill("Shop mới <an toàn>");
   for (const theme of ['light','dark']) {
@@ -174,7 +201,7 @@ try {
   assert.equal(await page.locator(".shop-label").count(), 0);
   assert.deepEqual(errors, []);
   console.log(
-    "PASS (mocked Supabase): guest login action, shop label/edit/persistence, mobile account header, logout and cleared identity",
+    "PASS (mocked Supabase): guest login action, shop label/edit/persistence, mobile account header, background request polling with preserved draft, logout and cleared identity",
   );
 } finally {
   await browser.close();

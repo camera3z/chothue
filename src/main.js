@@ -331,7 +331,7 @@ function revenueChart(months) {
 let overviewPending = [],
   overviewPendingCount = 0;
 function pendingOverview() {
-  return `<section class="card" id="overview-requests"><div class="panel-title"><h2>Yêu cầu thuê chờ duyệt <span class="pill request-status-pending">${overviewPendingCount}</span></h2><button class="btn sm" data-refresh-requests aria-label="Làm mới yêu cầu thuê">Làm mới</button></div><div class="list">${bookingRequestsError ? '<div class="empty">Chưa tải được yêu cầu. Vui lòng bấm Làm mới.</div>' : overviewPending.length ? overviewPending.map((r) => `<div class="row"><span><span class="r-top"><b>${esc(r.customer_name)}</b><span class="pill request-status-pending">Chờ duyệt</span></span><span class="r-sub">${esc(assetName(r.asset_id))} × ${r.quantity}</span><span class="r-sub">${esc(r.phone)} · ${r.requested_start_date ? dateLabel(r.requested_start_date) : esc(new Date(r.starts_at).toLocaleString("vi-VN"))}</span></span><button class="btn sm pri" data-review-request="${r.id}">Xem xét</button></div>`).join("") : '<div class="empty"><b>Chưa có yêu cầu chờ duyệt</b>Yêu cầu mới từ trang khách sẽ xuất hiện ở đây sau khi làm mới.</div>'}</div><button class="text-btn" data-view="requests">Xem tất cả yêu cầu →</button></section>`;
+  return `<section class="card" id="overview-requests"><div class="panel-title"><h2>Yêu cầu thuê chờ duyệt <span class="pill request-status-pending">${overviewPendingCount}</span></h2><button class="btn sm" data-refresh-requests aria-label="Làm mới yêu cầu thuê">Làm mới</button></div><div class="list">${bookingRequestsError ? '<div class="empty">Chưa tải được yêu cầu. Vui lòng bấm Làm mới.</div>' : overviewPending.length ? overviewPending.map((r) => `<div class="row"><span><span class="r-top"><b>${esc(r.customer_name)}</b><span class="pill request-status-pending">Chờ duyệt</span></span><span class="r-sub">${esc(assetName(r.asset_id))} × ${r.quantity}</span><span class="r-sub">${esc(r.phone)} · ${r.requested_start_date ? dateLabel(r.requested_start_date) : esc(new Date(r.starts_at).toLocaleString("vi-VN"))}</span></span><button class="btn sm pri" data-review-request="${r.id}">Xem xét</button></div>`).join("") : '<div class="empty"><b>Chưa có yêu cầu chờ duyệt</b>Tự cập nhật yêu cầu mới mỗi 15 giây.</div>'}</div><button class="text-btn" data-view="requests">Xem tất cả yêu cầu →</button></section>`;
 }
 function overview() {
   const renting = state.contracts.filter(active),
@@ -1252,6 +1252,53 @@ function renderAuth() {
         : "";
   };
 }
+let requestRefreshSequence = 0;
+let requestPollBusy = false;
+async function refreshAdminRequests(patch = true) {
+  if (!db || !session || !org) return;
+  const id = org.id, userId = session.user.id;
+  const sequence = ++requestRefreshSequence;
+  const previous = JSON.stringify([bookingRequests, overviewPending, overviewPendingCount, bookingRequestsError]);
+  const [requests, pending] = await Promise.all([
+    db.from("rental_requests").select("*").eq("organization_id", id)
+      .order("created_at", { ascending: false }).limit(requestLimit),
+    db.from("rental_requests").select("*", { count: "exact" })
+      .eq("organization_id", id).eq("status", "pending")
+      .order("created_at", { ascending: false }).limit(5),
+  ]);
+  // Ignore responses from a prior account, workspace or superseded request.
+  if (sequence !== requestRefreshSequence || session?.user.id !== userId || org?.id !== id) return;
+  bookingRequestsError = requests.error?.message || pending.error?.message || "";
+  if (!bookingRequestsError) {
+    bookingRequests = Array.isArray(requests.data) ? requests.data : [];
+    overviewPending = Array.isArray(pending.data)
+      ? pending.data.filter((r) => r.status === "pending") : [];
+    overviewPendingCount = pending.count ?? overviewPending.length;
+    for (const r of overviewPending)
+      if (!bookingRequests.some((x) => x.id === r.id)) bookingRequests.push(r);
+  }
+  if (!patch || previous === JSON.stringify([bookingRequests, overviewPending, overviewPendingCount, bookingRequestsError])) return;
+  // Only replace the request panels. Never render(), reload records, or touch
+  // the open modal: its values, files and optimistic revision stay intact.
+  if (view === "overview") {
+    const panel = document.querySelector("#overview-requests");
+    if (panel) panel.outerHTML = pendingOverview();
+  } else if (view === "requests") {
+    const panel = document.querySelector("#content");
+    if (panel) panel.innerHTML = requestList();
+  }
+}
+async function pollAdminRequests() {
+  if (document.hidden || requestPollBusy || !session || !org) return;
+  requestPollBusy = true;
+  try {
+    await refreshAdminRequests();
+  } catch {
+    // Keep the last successful result; retry on the next tick.
+  } finally {
+    requestPollBusy = false;
+  }
+}
 async function load() {
   const { data: members, error } = await db
     .from("members")
@@ -1281,28 +1328,7 @@ async function load() {
   state = r.data?.data || { assets: [], customers: [], contracts: [] };
   state._revision = r.data?.version ?? 0;
   license = l.data;
-  const requests = await db
-    .from("rental_requests")
-    .select("*")
-    .eq("organization_id", id)
-    .order("created_at", { ascending: false })
-    .limit(requestLimit);
-  bookingRequests = Array.isArray(requests.data) ? requests.data : [];
-  bookingRequestsError = requests.error?.message || "";
-  const pending = await db
-    .from("rental_requests")
-    .select("*", { count: "exact" })
-    .eq("organization_id", id)
-    .eq("status", "pending")
-    .order("created_at", { ascending: false })
-    .limit(5);
-  overviewPending = Array.isArray(pending.data)
-    ? pending.data.filter((r) => r.status === "pending")
-    : [];
-  overviewPendingCount = pending.count ?? overviewPending.length;
-  bookingRequestsError ||= pending.error?.message || "";
-  for (const r of overviewPending)
-    if (!bookingRequests.some((x) => x.id === r.id)) bookingRequests.push(r);
+  await refreshAdminRequests(false);
 
   const storefront = await db
     .from("storefronts")
@@ -1329,6 +1355,13 @@ function init() {
   }
   document.querySelector("#app").textContent = "Đang tải không gian…";
   let userId = null;
+  const requestInterval = setInterval(pollAdminRequests, 15000);
+  const onAdminVisible = () => { if (!document.hidden) pollAdminRequests(); };
+  document.addEventListener("visibilitychange", onAdminVisible);
+  window.addEventListener("pagehide", () => {
+    clearInterval(requestInterval);
+    document.removeEventListener("visibilitychange", onAdminVisible);
+  }, { once: true });
   db.auth.onAuthStateChange((event, s) => {
     session = s;
     // Supabase also emits SIGNED_IN when an existing session is recovered
@@ -1343,6 +1376,12 @@ function init() {
       });
       return;
     }
+    requestRefreshSequence++;
+    bookingRequests = [];
+    overviewPending = [];
+    overviewPendingCount = 0;
+    bookingRequestsError = "";
+    org = null;
     userId = s?.user.id || null;
     setTimeout(async () => {
       try {
