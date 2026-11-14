@@ -82,7 +82,7 @@ export async function renderStorefront(db, shopId) {
         filtered
           .map(
             (a) =>
-              `<article class="card acard"><div class="asset-photo">${urls.has(a.imagePath) ? `<img src="${esc(urls.get(a.imagePath))}" alt="${esc(a.name)}" loading="lazy">` : '<span class="asset-photo-placeholder">Chưa có ảnh</span>'}</div><div class="t"><h3>${esc(a.name)}</h3><span class="pill st-ready">Còn ${Number(a.available)} sẵn sàng</span></div><div class="r-sub">${esc(a.category)}</div><div class="pr">${money(a.price)} / ${esc(a.unit)}</div><button class="btn pri" data-book="${esc(a.id)}">Đặt thuê</button></article>`,
+              `<article class="card acard"><div class="asset-photo">${urls.has(a.imagePath) ? `<img src="${esc(urls.get(a.imagePath))}" alt="${esc(a.name)}" loading="lazy">` : '<span class="asset-photo-placeholder">Chưa có ảnh</span>'}</div><div class="t"><h3 title="${esc(a.name)}">${esc(a.name)}</h3><span class="pill st-ready">Số lượng còn: ${Number(a.available)}</span></div><div class="r-sub">${esc(a.category)}</div><div class="pr">${money(a.price)} / ${esc(a.unit)}</div><button class="btn pri" data-book="${esc(a.id)}">Đặt thuê</button></article>`,
           )
           .join("") ||
         '<div class="empty"><b>Chưa có tài sản phù hợp</b>Thử đổi từ khóa hoặc quay lại sau.</div>'
