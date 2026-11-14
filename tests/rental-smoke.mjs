@@ -17,14 +17,28 @@ await p.getByRole("heading", { name: "Hôm nay", exact: true }).waitFor();
 await p.locator(".page-title [data-add=contract]").click();
 await p.locator("[name=quantity]").fill("2");
 await p.locator("[name=paid]").fill("100000");
-await p.locator("[name=deposit]").fill("500000");
+assert.equal(await p.locator("[name=deposit]").count(), 0);
 await p.locator("[name=handoverNote]").fill("Đủ phụ kiện <test>");
 await p.getByRole("button", { name: "Lưu thông tin", exact: true }).click();
 await p.getByText("HĐ-0001", { exact: true }).waitFor();
 let state = await p.evaluate(() =>
   JSON.parse(localStorage.getItem("chothue-demo-v1")),
 );
-assert.equal(state.contracts[0].deposit, 500000);
+assert.equal(state.contracts[0].deposit, 0);
+// Simulate an existing legacy security deposit; new contracts no longer create one.
+await p.evaluate(() => {
+  const s = JSON.parse(localStorage.getItem("chothue-demo-v1"));
+  s.contracts[0].paymentModel = "legacy_security";
+  s.contracts[0].deposit = 500000;
+  s.contracts[0].transactions.push({
+    id: "legacy-deposit",
+    type: "deposit",
+    amount: 500000,
+    at: new Date().toISOString(),
+  });
+  localStorage.setItem("chothue-demo-v1", JSON.stringify(s));
+});
+await p.reload();
 assert.equal(state.contracts[0].total, 900000);
 await p.locator(".snav [data-view=assets]").click();
 await p.locator("[data-maintenance=a1]").click();

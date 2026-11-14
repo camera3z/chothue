@@ -57,7 +57,7 @@ export function openBookingRequest(db, shop, asset) {
         style: "currency",
         currency: "VND",
       }).format(price) +
-      " · Chưa gồm cọc, giao nhận và phụ phí. Quy ước 1 tháng = 30 ngày, 1 năm = 365 ngày; ngày lẻ tính theo ngày. Shop sẽ xác nhận lại.";
+      " · Trả trước được trừ vào tiền thuê; giao nhận và phụ phí do shop xác nhận. Quy ước 1 tháng = 30 ngày, 1 năm = 365 ngày; ngày lẻ tính theo ngày. Shop sẽ xác nhận lại.";
   }
   form.addEventListener("input", calculate);
   calculate();

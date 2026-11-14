@@ -43,7 +43,7 @@ Dữ liệu MVP lưu một JSON document cho mỗi workspace, yêu cầu đặt 
 
 Bản giao diện mới dùng tên RENTOS, tông xanh đậm/cam và màn hình đăng nhập hai cột. Bàn điều hành theo dõi tài sản đang thuê, lịch hẹn trả trong ngày, hợp đồng quá hạn, công nợ và kho khả dụng. Lịch giao–trả hiển thị từng ngày trong tuần; danh sách hợp đồng lọc theo đang thuê/quá hạn/đã trả.
 
-Tiền cọc tách riêng tiền thuê: nhập cọc khi tạo hợp đồng, hoàn một phần hoặc toàn bộ khi nhận trả, và hoàn phần còn lại trong Công nợ & tiền cọc. Chi tiết hợp đồng lưu ghi chú giao/nhận và nhật ký các lần thu/hoàn từ phiên bản này. Hợp đồng cũ vẫn đọc được; không tự tạo nhật ký giả cho các khoản thu cũ. Tài sản bảo trì bị trừ khỏi tồn khả dụng; cập nhật số lượng bảo trì về 0 khi hoàn tất. Dữ liệu bổ sung dùng các trường JSON tùy chọn trong records, không cần chạy lại schema SQL hay xóa dữ liệu.
+Khoản cọc ban đầu là tiền trả trước và được trừ vào tổng tiền thuê. Form tạo hợp đồng chỉ có một ô đã thu/trả trước; khi nhận trả có thể thu tiếp số còn thiếu. Cọc bảo đảm đã lưu trong phiên bản cũ vẫn giữ riêng và có thể hoàn; không tự chuyển sang tiền thuê. Chi tiết hợp đồng lưu ghi chú giao/nhận và nhật ký các lần thu/hoàn từ phiên bản này. Hợp đồng cũ vẫn đọc được; không tự tạo nhật ký giả cho các khoản thu cũ. Tài sản bảo trì bị trừ khỏi tồn khả dụng; cập nhật số lượng bảo trì về 0 khi hoàn tất. Dữ liệu bổ sung dùng các trường JSON tùy chọn trong records, không cần chạy lại schema SQL hay xóa dữ liệu.
 
 Lịch UI thể hiện ngày giao/hẹn trả; kiểm tra đặt chỗ mới dùng timestamp chính xác ở database. Chưa hỗ trợ hợp đồng nhiều dòng tài sản, trả từng phần, tự động tính phí trễ/hư hỏng hoặc khấu trừ cọc. Không tự quy đổi tổng đơn vị giữa các ngành; người dùng cần đặt danh mục và đơn vị tính phù hợp.
 
@@ -66,7 +66,7 @@ Nếu Chromium hệ thống đã có sẵn: `CHROMIUM_PATH=/usr/bin/chromium npm
 
 ## Giao diện Rentbook
 
-Giao diện hiện tại dựa trên mẫu `rentbook_1.html` người dùng cung cấp: bảng màu xanh ngọc, bố cục sáng gọn, menu trái trên desktop và điều hướng dưới trên mobile. Có chế độ sáng/tối (ghi nhớ trong trình duyệt), danh sách đơn thuê dạng hàng, tài sản dạng thẻ với bộ lọc danh mục, lịch thanh theo từng tài sản trong 14 ngày và tổng quan thu tiền sáu tháng. Biểu đồ chỉ lấy giao dịch `rent` có ngày trong `transactions`; không coi tiền cọc là doanh thu và không tự suy diễn ngày thu của dữ liệu cũ.
+Giao diện hiện tại dựa trên mẫu `rentbook_1.html` người dùng cung cấp: bảng màu xanh ngọc, bố cục sáng gọn, menu trái trên desktop và điều hướng dưới trên mobile. Có chế độ sáng/tối (ghi nhớ trong trình duyệt), danh sách đơn thuê dạng hàng, tài sản dạng thẻ với bộ lọc danh mục, lịch thanh theo từng tài sản trong 14 ngày và tổng quan thu tiền sáu tháng. Biểu đồ chỉ lấy giao dịch `rent` có ngày trong `transactions`; bao gồm khoản trả trước tiền thuê nhưng không coi cọc bảo đảm cũ là tiền thuê và không tự suy diễn ngày thu của dữ liệu cũ.
 
 Chỉ áp dụng giao diện và các thao tác tương thích với mô hình dữ liệu hiện tại. Không nhập dữ liệu mẫu, mã JavaScript demo hoặc cơ chế workspace local của file mẫu vào Supabase. Đặt chỗ theo giờ được bổ sung trong migration đặt thuê bên dưới. Trường động theo loại hình và hủy hợp đồng đã duyệt chưa được triển khai; khách có thể hủy yêu cầu còn chờ duyệt bằng liên kết riêng. Chế độ Supabase và cấp key giữ nguyên, không cần chạy lại schema.
 
@@ -104,10 +104,10 @@ Trang khách không còn nút/link quản trị hoặc đăng nhập. Danh mục
 
 **Nâng cấp:** chạy toàn bộ `supabase/migrations/20261112_booking_requests.sql` trong Supabase SQL Editor sau migration trang trưng bày, rồi cập nhật code/build trên VPS và tải lại các tab quản trị. Không chạy lại schema gốc. Migration thêm bảng yêu cầu và `records.version`; thay mọi thao tác ghi records bằng RPC kiểm tra phiên bản và license. Các tab/code cũ dùng upsert trực tiếp sẽ không ghi được sau nâng cấp.
 
-- Trang khách có nút Đặt thuê: tên, SĐT, thời gian bắt đầu/kết thúc, số lượng, ghi chú và đồng ý gửi thông tin cho shop. Giá dự kiến do server tính lại từ đơn giá tài sản; tháng cố định 30 ngày, năm cố định 365 ngày và ngày lẻ tính theo ngày sau migration quy ước giá, chưa bao gồm cọc/giao nhận/phụ phí.
+- Trang khách có nút Đặt thuê: tên, SĐT, thời gian bắt đầu/kết thúc, số lượng, ghi chú và đồng ý gửi thông tin cho shop. Giá dự kiến do server tính lại từ đơn giá tài sản; tháng cố định 30 ngày, năm cố định 365 ngày và ngày lẻ tính theo ngày sau migration quy ước giá, chưa bao gồm giao nhận/phụ phí; trả trước là một phần của tiền thuê.
 - Yêu cầu chờ duyệt không giữ tồn và không tạo khoản thu. Khách nhận mã và liên kết riêng ở lần gửi thành công đầu tiên (token ở URL fragment; lần gửi lại cùng mã chỉ trả xác nhận, không phát lại token) để xem trạng thái/tự hủy khi còn pending. Sau duyệt phải liên hệ shop; không cho khách tự thay đổi hợp đồng. Không chia sẻ liên kết riêng cho người khác.
-- Quản trị vào Yêu cầu đặt thuê → Làm mới → Xem xét. Có thể sửa tên/SĐT, thời gian, số lượng, tổng tiền thuê, cọc yêu cầu và điều khoản, rồi duyệt hoặc từ chối. Duyệt tạo hợp đồng `reserved` (Đã duyệt · Chờ giao), không tự coi cọc thỏa thuận là tiền đã nhận. Không ghi đè hồ sơ khách cũ khi trùng SĐT; hợp đồng lưu snapshot tên/SĐT thỏa thuận.
-- Đơn thuê → Chỉnh lịch để sửa thỏa thuận trước giao; Giao tài sản để chuyển active; Nhận trả để chuyển returned. Công nợ & tiền cọc có Nhận cọc, Thu tiền, Hoàn cọc riêng.
+- Quản trị vào Yêu cầu đặt thuê → Làm mới → Xem xét. Có thể sửa tên/SĐT, thời gian, số lượng, tổng tiền thuê, khoản trả trước yêu cầu và điều khoản, rồi duyệt hoặc từ chối. Duyệt tạo hợp đồng `reserved` (Đã duyệt · Chờ giao), không tự coi khoản trả trước thỏa thuận là tiền đã nhận. Không ghi đè hồ sơ khách cũ khi trùng SĐT; hợp đồng lưu snapshot tên/SĐT thỏa thuận.
+- Đơn thuê → Chỉnh lịch để sửa thỏa thuận trước giao; Giao tài sản để chuyển active; Nhận trả để chuyển returned. Công nợ & tiền cọc có Ghi nhận thu (gồm trả trước), và Hoàn cọc cũ nếu có khoản bảo đảm lịch sử.
 
 **Lịch và tồn:** booking mới dùng khoảng thời gian nửa mở `[bắt đầu,kết thúc)`, nên hai đơn nối tiếp đúng giờ được phép. So sánh đỉnh sử dụng đồng thời, không cộng sai các đơn rời nhau; trừ số bảo trì. Đơn date-only cũ giữ đến hết ngày cuối theo Asia/Bangkok. Active vẫn giữ hàng cho đến nhận trả; nếu đã quá giờ hẹn thì chặn lịch tương lai vô hạn đến lúc trả. Giữ chỗ tương lai không làm ẩn tài sản đang còn sẵn sàng hiện tại; đến khoảng đã giữ, tồn sẵn sàng giảm. Khi giao sớm/chậm, tạo đơn thủ công hoặc đưa vào bảo trì, server kiểm tra lại lịch. Lịch UI vẫn hiển thị theo ngày, giờ chính xác trong Chi tiết; form dùng múi giờ thiết bị rồi gửi timestamp UTC.
 
@@ -144,3 +144,12 @@ Chạy `supabase/migrations/20261114_fixed_billing.sql` để đồng bộ giá 
 Trong Tạo hợp đồng, đơn vị tháng/năm hiện ô Số tháng thuê/Số năm thuê (mặc định 1, lớn hơn 0, tối đa 10.000, tối đa 2 chữ số thập phân). Tổng tiền = số kỳ nhập × đơn giá × số tài sản; ngày bắt đầu/kết thúc không ảnh hưởng tiền nhưng vẫn phải hợp lệ và vẫn dùng kiểm tra lịch/tồn trên server. Đơn vị ngày ẩn/vô hiệu ô này và tiếp tục lấy số ngày từ lịch. Thay đổi ngày không tự thay số kỳ đã nhập, không tự đẩy ngày trả khi tăng số kỳ.
 
 Hợp đồng mới lưu billingMethod=manual_periods cho tháng/năm, periods/billingPeriods là số nhập, billingDays là số ngày theo lịch chỉ để tham chiếu. Dữ liệu cũ và giá dự kiến ở form đặt thuê công khai không bị sửa. Không cần thêm SQL; kiểm thử công thức và UI ở tests/rental-pricing.mjs, tests/contract-pricing-ui.mjs.
+
+
+## Trả trước và thanh toán khi nhận trả
+
+Form Tạo hợp đồng bỏ ô cọc bảo đảm riêng. Ô Tiền cọc / trả trước đã thu ghi vào paid và giao dịch rent, được trừ khỏi tổng tiền thuê. Hợp đồng mới có paymentModel=advance_rent, initialPaid là khoản nhận lúc tạo, deposit=0. Không cộng hai lần vào doanh thu hay công nợ; không coi tiền trả trước là khoản phải hoàn riêng.
+
+Nhận trả & thanh toán hiển thị tổng, đã thu và còn thiếu; ô nhập khoản nhận thêm mặc định 0 để không ghi nhận tiền chưa thực nhận, có nút Thu đủ phần còn lại để điền nhanh. Có thể thu một phần rồi nhận trả, công nợ còn lại tiếp tục thu qua Ghi nhận thu. Thay đổi trạng thái và tiền thu/nhật ký được lưu cùng một lần bằng RPC có kiểm tra version. Không nhận vượt tổng tiền thuê.
+
+Không tự hợp nhất cọc bảo đảm cũ: deposit/depositRefunded đã có giữ nguyên, hiện rõ Cọc bảo đảm cũ và vẫn cho hoàn; người quản trị cần đối soát trước nếu muốn chuyển đổi dữ liệu lịch sử. Yêu cầu đặt thuê chỉ lưu khoản trả trước dự kiến trong depositRequired, chưa ghi nhận thu. Không cần SQL cho thay đổi này. Kiểm tra dòng tiền mới: `CHROMIUM_PATH=/usr/bin/chromium node tests/advance-payment-ui.mjs`; kiểm tra tương thích cọc cũ: `npm run test:smoke` với server demo cổng 5174.

@@ -369,7 +369,7 @@ function overview() {
     )
     .join(
       "",
-    )}</div><div class="cols"><div class="stack"><section class="card"><h2>Việc cần xử lý</h2><div class="list">${[...late, ...due].length ? [...late, ...due].map((c) => `<div class="row"><span><span class="r-top"><span class="pill ${overdue(c) ? "st-late" : "st-out"}">${overdue(c) ? "Quá hạn" : "Hẹn trả hôm nay"}</span><b>${esc(c.agreedCustomerName || customerName(c.customerId))}</b></span><span class="r-sub">${esc(assetName(c.assetId))} × ${c.quantity} · <button class="btn sm" data-detail="${c.id}">${esc(c.code)}</button></span><span class="r-sub">${overdue(c) ? "Quá hạn từ" : "Hẹn trả"} ${dateLabel(c.end)}</span></span><span class="r-end"><button class="btn sm pri" data-return="${c.id}">Nhận trả</button></span></div>`).join("") : '<div class="empty"><b>Hôm nay không có việc tồn đọng</b>Không có đơn quá hạn hoặc hẹn trả trong ngày.</div>'}</div></section>${pendingOverview()}</div><div class="stack"><section class="card"><h2>Tiền thuê đã thu · 6 tháng</h2>${revenueChart(months)}<p class="footnote">Theo nhật ký thu tiền, không bao gồm tiền cọc. Khoản thu cũ chưa có ngày ghi nhận không được đưa vào biểu đồ.</p></section><section class="card"><h2>Thu tiền theo loại hình · 6 tháng</h2>${
+    )}</div><div class="cols"><div class="stack"><section class="card"><h2>Việc cần xử lý</h2><div class="list">${[...late, ...due].length ? [...late, ...due].map((c) => `<div class="row"><span><span class="r-top"><span class="pill ${overdue(c) ? "st-late" : "st-out"}">${overdue(c) ? "Quá hạn" : "Hẹn trả hôm nay"}</span><b>${esc(c.agreedCustomerName || customerName(c.customerId))}</b></span><span class="r-sub">${esc(assetName(c.assetId))} × ${c.quantity} · <button class="btn sm" data-detail="${c.id}">${esc(c.code)}</button></span><span class="r-sub">${overdue(c) ? "Quá hạn từ" : "Hẹn trả"} ${dateLabel(c.end)}</span></span><span class="r-end"><button class="btn sm pri" data-return="${c.id}">Nhận trả</button></span></div>`).join("") : '<div class="empty"><b>Hôm nay không có việc tồn đọng</b>Không có đơn quá hạn hoặc hẹn trả trong ngày.</div>'}</div></section>${pendingOverview()}</div><div class="stack"><section class="card"><h2>Tiền thuê đã thu · 6 tháng</h2>${revenueChart(months)}<p class="footnote">Theo tiền thuê thực thu, gồm trả trước; không gồm cọc bảo đảm cũ. Khoản thu cũ chưa có ngày ghi nhận không được đưa vào biểu đồ.</p></section><section class="card"><h2>Thu tiền theo loại hình · 6 tháng</h2>${
     Object.keys(categories).length
       ? Object.entries(categories)
           .sort((a, b) => b[1] - a[1])
@@ -450,8 +450,10 @@ function openRequestReview(id) {
   const done = r.status !== "pending";
   modal(
     done ? "Chi tiết yêu cầu" : "Xem xét & duyệt đơn thuê",
-    `<div class="summary-box"><h3>${esc(assetName(r.asset_id))}</h3><p class="request-note">Khách ghi chú: ${esc(r.note || "Không có")}</p><p class="code">${esc(r.id)}</p></div><label>Quyết định<select name="decision" ${done ? "disabled" : ""}><option value="approve">Duyệt & tạo hợp đồng giữ chỗ</option><option value="reject">Từ chối yêu cầu</option></select></label>${input("Tên khách thỏa thuận", "name", "text", `maxlength="120" value="${esc(r.customer_name)}"`)}${input("Số điện thoại", "phone", "tel", `value="${esc(r.phone)}"`)}<div class="form-grid">${input("Bắt đầu", "start", "datetime-local", `value="${localInput(r.starts_at)}"`)}${input("Kết thúc", "end", "datetime-local", `value="${localInput(r.ends_at)}"`)}</div>${input("Số lượng", "quantity", "number", `min="1" max="10000" step="1" value="${r.quantity}"`)}${input("Tổng tiền thuê thỏa thuận (₫)", "total", "number", `min="0" max="100000000000" value="${r.final_total ?? r.estimated_total}"`)}${input("Tiền cọc yêu cầu (chưa phải tiền đã nhận)", "deposit", "number", `min="0" max="100000000000" value="${r.deposit_required ?? 0}"`)}<label>Điều khoản / ghi chú duyệt / lý do từ chối<textarea name="terms" maxlength="4000">${esc(r.review_note || "")}</textarea></label><p class="footnote">Duyệt sẽ kiểm tra lại lịch và tạo hợp đồng giữ chỗ. Chưa ghi nhận thu tiền. Sau khi giao thực tế, vào Đơn thuê → Giao tài sản. ${done ? "Yêu cầu này đã xử lý, không thể duyệt lại." : ""}</p>`,
+    `<div class="summary-box"><h3>${esc(assetName(r.asset_id))}</h3><p class="request-note">Khách ghi chú: ${esc(r.note || "Không có")}</p><p class="code">${esc(r.id)}</p></div><label>Quyết định<select name="decision" ${done ? "disabled" : ""}><option value="approve">Duyệt & tạo hợp đồng giữ chỗ</option><option value="reject">Từ chối yêu cầu</option></select></label>${input("Tên khách thỏa thuận", "name", "text", `maxlength="120" value="${esc(r.customer_name)}"`)}${input("Số điện thoại", "phone", "tel", `value="${esc(r.phone)}"`)}<div class="form-grid">${input("Bắt đầu", "start", "datetime-local", `value="${localInput(r.starts_at)}"`)}${input("Kết thúc", "end", "datetime-local", `value="${localInput(r.ends_at)}"`)}</div>${input("Số lượng", "quantity", "number", `min="1" max="10000" step="1" value="${r.quantity}"`)}${input("Tổng tiền thuê thỏa thuận (₫)", "total", "number", `min="0" max="100000000000" value="${r.final_total ?? r.estimated_total}"`)}${input("Trả trước yêu cầu (trừ vào tiền thuê, chưa ghi nhận thu)", "deposit", "number", `min="0" max="100000000000" value="${r.deposit_required ?? 0}"`)}<label>Điều khoản / ghi chú duyệt / lý do từ chối<textarea name="terms" maxlength="4000">${esc(r.review_note || "")}</textarea></label><p class="footnote">Duyệt sẽ kiểm tra lại lịch và tạo hợp đồng giữ chỗ. Chưa ghi nhận thu tiền. Sau khi giao thực tế, vào Đơn thuê → Giao tài sản. ${done ? "Yêu cầu này đã xử lý, không thể duyệt lại." : ""}</p>`,
     async (d) => {
+      if (d.decision === "approve" && Number(d.deposit) > Number(d.total))
+        throw Error("Khoản trả trước yêu cầu không được vượt tổng tiền thuê.");
       const { error } = await db.rpc("review_rental_request", {
         p_shop: org.id,
         p_request: r.id,
@@ -499,12 +501,14 @@ function editReservation(id) {
   const c = state.contracts.find((c) => c.id === id);
   modal(
     "Chỉnh lịch đã duyệt",
-    `<p>${esc(assetName(c.assetId))} · ${esc(c.agreedCustomerName || customerName(c.customerId))}</p><div class="form-grid">${input("Bắt đầu", "start", "datetime-local", `value="${localInput(c.rentalStart)}"`)}${input("Kết thúc", "end", "datetime-local", `value="${localInput(c.rentalEnd)}"`)}</div>${input("Số lượng", "quantity", "number", `min="1" max="10000" step="1" value="${c.quantity}"`)}${input("Tổng tiền thuê", "total", "number", `min="${c.paid || 0}" max="100000000000" value="${c.total}"`)}${input("Cọc yêu cầu", "deposit", "number", `min="0" max="100000000000" value="${c.depositRequired || 0}"`)}<label>Thỏa thuận<textarea name="terms" maxlength="4000">${esc(c.handoverNote || "")}</textarea></label>`,
+    `<p>${esc(assetName(c.assetId))} · ${esc(c.agreedCustomerName || customerName(c.customerId))}</p><div class="form-grid">${input("Bắt đầu", "start", "datetime-local", `value="${localInput(c.rentalStart)}"`)}${input("Kết thúc", "end", "datetime-local", `value="${localInput(c.rentalEnd)}"`)}</div>${input("Số lượng", "quantity", "number", `min="1" max="10000" step="1" value="${c.quantity}"`)}${input("Tổng tiền thuê", "total", "number", `min="${c.paid || 0}" max="100000000000" value="${c.total}"`)}${input("Trả trước yêu cầu (chưa ghi nhận thu)", "deposit", "number", `min="0" max="100000000000" value="${c.depositRequired || 0}"`)}<label>Thỏa thuận<textarea name="terms" maxlength="4000">${esc(c.handoverNote || "")}</textarea></label>`,
     async (d) => {
       const start = new Date(d.start),
         end = new Date(d.end);
       if (end <= start || end <= new Date())
         throw Error("Thời gian thuê không hợp lệ hoặc đã qua.");
+      if (Number(d.deposit) > Number(d.total))
+        throw Error("Khoản trả trước yêu cầu không được vượt tổng tiền thuê.");
       const n = structuredClone(state),
         t = n.contracts.find((c) => c.id === id);
       Object.assign(t, {
@@ -521,29 +525,7 @@ function editReservation(id) {
     },
   );
 }
-function receiveDeposit(id) {
-  const c = state.contracts.find((c) => c.id === id);
-  modal(
-    "Ghi nhận tiền cọc",
-    `<p>Cọc thỏa thuận ${money(c.depositRequired || 0)} · Đang giữ ${money(held(c))}</p>${input("Số tiền cọc nhận thêm (₫)", "amount", "number", 'min="1" max="100000000000" step="1"')}`,
-    async (d) => {
-      const amount = Number(d.amount);
-      if (!Number.isFinite(amount) || amount <= 0)
-        throw Error("Số tiền không hợp lệ.");
-      const n = structuredClone(state),
-        target = n.contracts.find((c) => c.id === id);
-      target.deposit = Number(target.deposit || 0) + amount;
-      target.transactions ??= [];
-      target.transactions.push({
-        id: crypto.randomUUID(),
-        type: "deposit",
-        amount,
-        at: new Date().toISOString(),
-      });
-      await save(n);
-    },
-  );
-}
+
 function content() {
   if (view === "requests")
     return db
@@ -620,7 +602,7 @@ function content() {
       '<div class="empty"><b>Chưa có đơn thuê phù hợp</b>Tạo đơn thuê mới hoặc đổi bộ lọc.</div>'
     }</div>`;
   if (view === "payments")
-    return `<div class="kpis"><div class="kpi"><span>Tiền thuê còn phải thu</span><b class="money-kpi">${money(state.contracts.reduce((n, c) => n + Math.max(0, c.total - c.paid), 0))}</b></div><div class="kpi"><span>Tiền cọc đang giữ</span><b class="money-kpi">${money(state.contracts.reduce((n, c) => n + held(c), 0))}</b></div></div><div class="list">${state.contracts.map((c) => `<div class="row"><span><span class="r-top"><b>${esc(c.agreedCustomerName || customerName(c.customerId))}</b><span class="code">${esc(c.code)}</span></span><span class="r-sub">Đã thu ${money(c.paid)} / ${money(c.total)}</span><span class="r-sub">Cọc đang giữ ${money(held(c))}</span></span><span class="r-end"><span class="amt">${money(Math.max(0, c.total - c.paid))}</span><span class="row-actions"><button class="btn sm" data-receive-deposit="${c.id}">Nhận cọc</button>${held(c) > 0 ? `<button class="btn sm" data-refund="${c.id}">Hoàn cọc</button>` : ""}${c.paid < c.total ? `<button class="btn sm pri" data-pay="${c.id}">Ghi nhận thu</button>` : '<span class="pill st-ready">Đã thanh toán</span>'}</span></span></div>`).join("") || '<div class="empty"><b>Chưa có đơn thuê</b>Công nợ và tiền cọc sẽ hiển thị tại đây.</div>'}</div><p class="footnote">Tiền cọc theo dõi riêng, không cộng vào doanh thu hoặc trừ công nợ tiền thuê.</p>`;
+    return `<div class="kpis"><div class="kpi"><span>Tiền thuê còn phải thu</span><b class="money-kpi">${money(state.contracts.reduce((n, c) => n + Math.max(0, c.total - c.paid), 0))}</b></div><div class="kpi"><span>Đã thu (gồm cọc / trả trước)</span><b class="money-kpi">${money(state.contracts.reduce((n, c) => n + Number(c.paid), 0))}</b></div>${state.contracts.some((c) => held(c) > 0) ? `<div class="kpi"><span>Cọc bảo đảm cũ chưa hoàn</span><b class="money-kpi">${money(state.contracts.reduce((n, c) => n + held(c), 0))}</b></div>` : ""}</div><div class="list">${state.contracts.map((c) => `<div class="row"><span><span class="r-top"><b>${esc(c.agreedCustomerName || customerName(c.customerId))}</b><span class="code">${esc(c.code)}</span></span><span class="r-sub">Đã thu (gồm trả trước) ${money(c.paid)} / ${money(c.total)}</span>${held(c) > 0 ? `<span class="r-sub">Cọc bảo đảm cũ còn giữ ${money(held(c))}</span>` : ""}</span><span class="r-end"><span class="amt">${money(Math.max(0, c.total - c.paid))}</span><span class="row-actions">${held(c) > 0 ? `<button class="btn sm" data-refund="${c.id}">Hoàn cọc cũ</button>` : ""}${c.paid < c.total ? `<button class="btn sm pri" data-pay="${c.id}">Ghi nhận thu</button>` : '<span class="pill st-ready">Đã thanh toán</span>'}</span></span></div>`).join("") || '<div class="empty"><b>Chưa có đơn thuê</b>Công nợ sẽ hiển thị tại đây.</div>'}</div><p class="footnote">Tiền cọc ban đầu là khoản trả trước, được trừ vào tổng tiền thuê. Khoản cọc bảo đảm đã lưu từ phiên bản cũ vẫn giữ riêng để hoàn, không tự chuyển đổi.</p>`;
   return `<section class="license-layout"><article class="panel"><span class="eyebrow">BẢN QUYỀN KHÔNG GIAN LÀM VIỆC</span><h2>${db ? "Kích hoạt để bắt đầu kinh doanh" : "Bạn đang khám phá bản demo"}</h2><p>Mỗi key kích hoạt cho một đơn vị cho thuê. Dữ liệu giữa các đơn vị được phân quyền riêng.</p><div class="license-state"><span class="badge">${db ? (license && new Date(license.expires_at) > new Date() ? "Đã kích hoạt" : "Chưa kích hoạt") : "Chế độ demo"}</span>${license ? `<p>Hạn sử dụng: ${esc(new Date(license.expires_at).toLocaleDateString("vi-VN"))}</p>` : ""}</div><form id="key-form"><label>Key bản quyền<input name="key" placeholder="Nhập key do nhà cung cấp cấp" required ${db ? "" : "disabled"}></label><button class="primary" ${db ? "" : "disabled"}>Kích hoạt key</button></form><p class="footnote">${db ? "Key chỉ được sử dụng một lần và xác thực trên máy chủ." : "Để dùng key thật, kết nối dự án Supabase riêng theo README."}</p></article><article class="panel tip"><h3>Dành cho nhiều mô hình cho thuê</h3><p>✓ Danh mục tài sản tự do</p><p>✓ Đơn giá theo giờ, ngày, tháng hoặc lượt</p><p>✓ Khách thuê và hợp đồng</p><p>✓ Tồn khả dụng và công nợ</p><p>✓ Không gian dữ liệu riêng</p></article></section>`;
 }
 const iconPaths = {
@@ -780,10 +762,6 @@ function bind() {
       handoverContract(d.handover);
       return;
     }
-    if (d.receiveDeposit) {
-      receiveDeposit(d.receiveDeposit);
-      return;
-    }
     if (d.view) {
       view = d.view;
       search = "";
@@ -877,6 +855,7 @@ const moneyFields = new Set([
   "total",
   "amount",
   "refund",
+  "returnPayment",
 ]);
 const input = (label, name, type = "text", extra = "") =>
   type === "number" && moneyFields.has(name)
@@ -966,7 +945,7 @@ function openForm(type) {
       return toast("Hãy thêm tài sản và khách thuê trước.");
     modal(
       "Tạo hợp đồng",
-      `<label>Khách thuê<select name="customerId">${state.customers.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select></label><label>Tài sản<select name="assetId">${state.assets.map((a) => `<option value="${a.id}" ${available(a) < 1 ? "disabled" : ""}>${esc(a.name)} · Còn ${available(a)}</option>`).join("")}</select></label><div class="form-grid">${input("Ngày bắt đầu", "start", "date", `value="${today()}"`)}${input("Ngày kết thúc", "end", "date", `value="${today()}"`)}</div>${input("Số lượng tài sản", "quantity", "number", 'value="1" min="1" max="10000" step="1"')}<div class="form-grid">${input("Đơn giá thỏa thuận (₫)", "unitPrice", "number", 'value="0" min="0" max="100000000000" step="1"')}<label>Tính theo<select name="billingUnit"><option>ngày</option><option>tháng</option><option>năm</option></select></label></div><label id="billing-periods-field" hidden><span data-periods-label>Số tháng thuê</span><input name="billingPeriods" type="number" min="0.01" max="10000" step="0.01" value="1" disabled></label><div class="summary-box" id="contract-price-summary" role="status"></div><p class="footnote" id="contract-pricing-note"></p>${input("Tiền thuê đã thu (₫)", "paid", "number", 'value="0" min="0" step="1000"')}${input("Tiền cọc đã nhận (₫)", "deposit", "number", 'value="0" min="0" step="1000"')}<label>Ghi chú bàn giao<textarea name="handoverNote" placeholder="Phụ kiện đi kèm, tình trạng tài sản, địa chỉ giao…"></textarea></label>`,
+      `<label>Khách thuê<select name="customerId">${state.customers.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select></label><label>Tài sản<select name="assetId">${state.assets.map((a) => `<option value="${a.id}" ${available(a) < 1 ? "disabled" : ""}>${esc(a.name)} · Còn ${available(a)}</option>`).join("")}</select></label><div class="form-grid">${input("Ngày bắt đầu", "start", "date", `value="${today()}"`)}${input("Ngày kết thúc", "end", "date", `value="${today()}"`)}</div>${input("Số lượng tài sản", "quantity", "number", 'value="1" min="1" max="10000" step="1"')}<div class="form-grid">${input("Đơn giá thỏa thuận (₫)", "unitPrice", "number", 'value="0" min="0" max="100000000000" step="1"')}<label>Tính theo<select name="billingUnit"><option>ngày</option><option>tháng</option><option>năm</option></select></label></div><label id="billing-periods-field" hidden><span data-periods-label>Số tháng thuê</span><input name="billingPeriods" type="number" min="0.01" max="10000" step="0.01" value="1" disabled></label><div class="summary-box" id="contract-price-summary" role="status"></div><p class="footnote" id="contract-pricing-note"></p>${input("Tiền cọc / trả trước đã thu (₫)", "paid", "number", 'value="0" min="0" step="1"')}<p class="footnote">Khoản trả trước được trừ vào tổng tiền thuê. Khách trả tài sản sẽ thanh toán phần còn thiếu.</p><label>Ghi chú bàn giao<textarea name="handoverNote" placeholder="Phụ kiện đi kèm, tình trạng tài sản, địa chỉ giao…"></textarea></label>`,
       async (d) => {
         if (d.end < d.start)
           throw Error("Ngày kết thúc phải từ ngày bắt đầu trở đi.");
@@ -1000,7 +979,9 @@ function openForm(type) {
           periods,
           total,
           paid: Number(d.paid),
-          deposit: Number(d.deposit || 0),
+          deposit: 0,
+          paymentModel: "advance_rent",
+          initialPaid: Number(d.paid),
           depositRefunded: 0,
           transactions: [
             {
@@ -1008,12 +989,6 @@ function openForm(type) {
               at: new Date().toISOString(),
               type: "rent",
               amount: Number(d.paid),
-            },
-            {
-              id: crypto.randomUUID(),
-              at: new Date().toISOString(),
-              type: "deposit",
-              amount: Number(d.deposit || 0),
             },
           ].filter((t) => t.amount > 0),
           status: "active",
@@ -1098,7 +1073,7 @@ function openPayment(id) {
         throw Error("Số tiền không hợp lệ.");
       const n = structuredClone(state);
       const target = n.contracts.find((x) => x.id === id);
-      target.paid += amount;
+      target.paid = Number(target.paid || 0) + amount;
       target.transactions ??= [];
       target.transactions.push({
         id: crypto.randomUUID(),
@@ -1131,13 +1106,17 @@ function openMaintenance(id) {
   );
 }
 function openReturn(id) {
-  const c = state.contracts.find((x) => x.id === id);
+  const c = state.contracts.find((x) => x.id === id),
+    balance = Math.max(0, Number(c.total) - Number(c.paid));
   modal(
-    "Nhận trả tài sản",
-    `<div class="summary-box"><strong>${esc(c.code)} · ${esc(assetName(c.assetId))}</strong><p>${esc(c.agreedCustomerName || customerName(c.customerId))} · ${c.quantity} đơn vị</p><p>Còn tiền thuê: ${money(Math.max(0, c.total - c.paid))} · Cọc đang giữ: ${money(held(c))}</p></div>${input("Tiền cọc hoàn ngay (₫)", "refund", "number", `min="0" max="${held(c)}" value="${held(c)}" step="1"`)}<label>Tình trạng nhận trả<textarea name="returnNote" placeholder="Tình trạng, phụ kiện, hư hỏng nếu có…"></textarea></label><p class="footnote">Nhận trả đưa toàn bộ số lượng về kho. Công nợ tiền thuê và phần cọc chưa hoàn vẫn được giữ lại để theo dõi riêng.</p>`,
+    "Nhận trả & thanh toán",
+    `<div class="summary-box"><strong>${esc(c.code)} · ${esc(assetName(c.assetId))}</strong><p>${esc(c.agreedCustomerName || customerName(c.customerId))} · ${c.quantity} tài sản</p><p>Tổng tiền thuê: ${money(c.total)}</p><p>Đã thu (gồm trả trước): ${money(c.paid)}</p><p><b>Còn phải thanh toán: ${money(balance)}</b></p></div>${input("Tiền khách thanh toán thêm khi trả (₫)", "returnPayment", "number", `min="0" max="${balance}" value="0" step="1"`)}${balance > 0 ? `<button type="button" class="btn sm" data-fill-return-payment>Thu đủ ${money(balance)}</button>` : ""}${held(c) > 0 ? `<div class="summary-box"><p>Cọc bảo đảm cũ còn giữ: ${money(held(c))}. Khoản này vẫn theo dõi riêng, không tự trừ vào tiền thuê.</p>${input("Hoàn cọc bảo đảm cũ (₫)", "refund", "number", `min="0" max="${held(c)}" value="${held(c)}" step="1"`)}</div>` : ""}<label>Tình trạng nhận trả<textarea name="returnNote" placeholder="Tình trạng, phụ kiện, hư hỏng nếu có…"></textarea></label><p class="footnote">Chỉ nhập tiền đã thực nhận. Nếu khách chưa thanh toán đủ, công nợ còn lại vẫn được giữ để thu sau.</p>`,
     async (d) => {
-      const amount = Number(d.refund);
-      if (amount < 0 || amount > held(c))
+      const refund = Number(d.refund || 0),
+        payment = Number(d.returnPayment);
+      if (!Number.isSafeInteger(payment) || payment < 0 || payment > balance)
+        throw Error("Tiền thanh toán không được vượt số còn thiếu.");
+      if (!Number.isSafeInteger(refund) || refund < 0 || refund > held(c))
         throw Error("Tiền hoàn không hợp lệ.");
       const n = structuredClone(state),
         target = n.contracts.find((x) => x.id === id);
@@ -1145,24 +1124,40 @@ function openReturn(id) {
         status: "returned",
         returnedAt: new Date().toISOString(),
         returnNote: d.returnNote,
-        depositRefunded: Number(target.depositRefunded || 0) + amount,
+        paid: Number(target.paid) + payment,
+        depositRefunded: Number(target.depositRefunded || 0) + refund,
       });
       target.transactions ??= [];
-      if (amount)
+      if (payment)
+        target.transactions.push({
+          id: crypto.randomUUID(),
+          at: new Date().toISOString(),
+          type: "rent",
+          amount: payment,
+          note: "Thanh toán khi trả tài sản",
+        });
+      if (refund)
         target.transactions.push({
           id: crypto.randomUUID(),
           at: new Date().toISOString(),
           type: "refund",
-          amount,
+          amount: refund,
         });
       await save(n);
     },
   );
+  document
+    .querySelector("[data-fill-return-payment]")
+    ?.addEventListener("click", () => {
+      const field = document.querySelector("#modal [name=returnPayment]");
+      field.value = String(balance);
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
 }
 function openRefund(id) {
   const c = state.contracts.find((x) => x.id === id);
   modal(
-    "Hoàn tiền cọc",
+    "Hoàn cọc bảo đảm cũ",
     `<p>${esc(c.code)} · Cọc còn giữ ${money(held(c))}</p>${input("Số tiền hoàn (₫)", "amount", "number", `min="1" max="${held(c)}" value="${held(c)}" step="1"`)}`,
     async (d) => {
       const amount = Number(d.amount);
@@ -1185,7 +1180,7 @@ function openRefund(id) {
 function openDetail(id) {
   const c = state.contracts.find((x) => x.id === id);
   const el = document.querySelector("#modal");
-  el.innerHTML = `<div class="modal-title"><div><span class="eyebrow">HỒ SƠ CHO THUÊ</span><h2>${esc(c.code)}</h2></div><button id="close" aria-label="Đóng">×</button></div><div class="summary-box"><h3>${esc(assetName(c.assetId))}</h3><p>${esc(c.agreedCustomerName || customerName(c.customerId))} · ${c.quantity} đơn vị</p><p>Giao ${dateLabel(c.start)} → Hẹn trả ${dateLabel(c.end)}</p></div><div class="detail-money"><div>Tiền thuê<strong>${money(c.total)}</strong></div><div>Đã thu<strong>${money(c.paid)}</strong></div><div>Cọc đang giữ<strong>${money(held(c))}</strong></div></div><p class="footnote">${c.rentalStart ? `Thời gian: ${esc(new Date(c.rentalStart).toLocaleString("vi-VN"))} → ${esc(new Date(c.rentalEnd).toLocaleString("vi-VN"))}` : ""} · Cọc thỏa thuận ${money(c.depositRequired || 0)}</p><p class="footnote">${c.billingUnit ? `Đơn giá hợp đồng: ${money(c.unitPrice)} / ${esc(c.billingUnit)} · ${c.billingMethod === "fixed_days" ? `${c.billingDays} ngày / ${c.billingBasis} ngày mỗi kỳ` : `${c.periods} ${esc(c.billingUnit)}`} ` : ""}</p><h3>Ghi chú bàn giao</h3><p class="note-text">${esc(c.handoverNote || "Chưa có ghi chú")}</p><h3>Ghi chú nhận trả</h3><p class="note-text">${esc(c.returnNote || "Chưa nhận trả")}</p><h3>Lịch sử thu · hoàn tiền</h3>${
+  el.innerHTML = `<div class="modal-title"><div><span class="eyebrow">HỒ SƠ CHO THUÊ</span><h2>${esc(c.code)}</h2></div><button id="close" aria-label="Đóng">×</button></div><div class="summary-box"><h3>${esc(assetName(c.assetId))}</h3><p>${esc(c.agreedCustomerName || customerName(c.customerId))} · ${c.quantity} đơn vị</p><p>Giao ${dateLabel(c.start)} → Hẹn trả ${dateLabel(c.end)}</p></div><div class="detail-money"><div>Tiền thuê<strong>${money(c.total)}</strong></div><div>Đã thu<strong>${money(c.paid)}</strong></div>${held(c) > 0 ? `<div>Cọc bảo đảm cũ<strong>${money(held(c))}</strong></div>` : ""}</div><p class="footnote">${c.rentalStart ? `Thời gian: ${esc(new Date(c.rentalStart).toLocaleString("vi-VN"))} → ${esc(new Date(c.rentalEnd).toLocaleString("vi-VN"))}` : ""}${c.depositRequired ? ` · Khoản trả trước thỏa thuận ${money(c.depositRequired)}` : ""}</p><p class="footnote">${c.billingUnit ? `Đơn giá hợp đồng: ${money(c.unitPrice)} / ${esc(c.billingUnit)} · ${c.billingMethod === "fixed_days" ? `${c.billingDays} ngày / ${c.billingBasis} ngày mỗi kỳ` : `${c.periods} ${esc(c.billingUnit)}`} ` : ""}</p><h3>Ghi chú bàn giao</h3><p class="note-text">${esc(c.handoverNote || "Chưa có ghi chú")}</p><h3>Ghi chú nhận trả</h3><p class="note-text">${esc(c.returnNote || "Chưa nhận trả")}</p><h3>Lịch sử thu · hoàn tiền</h3>${
     (c.transactions || []).length
       ? table(
           ["Ngày", "Loại", "Số tiền"],

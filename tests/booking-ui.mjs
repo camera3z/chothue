@@ -231,7 +231,7 @@ try {
     .getByRole("button", { name: "Xem xét", exact: true })
     .click();
   await admin.locator("#modal [name=total]").fill("350000");
-  await admin.locator("#modal [name=deposit]").fill("500000");
+  await admin.locator("#modal [name=deposit]").fill("200000");
   await admin
     .getByRole("button", { name: "Lưu quyết định", exact: true })
     .click();
@@ -240,7 +240,7 @@ try {
     .getByText("Chưa có yêu cầu chờ duyệt", { exact: true })
     .waitFor();
   assert.equal(reviewed.p_total, 350000);
-  assert.equal(reviewed.p_deposit, 500000);
+  assert.equal(reviewed.p_deposit, 200000);
   await admin.locator(".snav [data-view=contracts]").click();
   await admin
     .getByRole("button", { name: "Giao tài sản", exact: true })
@@ -254,7 +254,9 @@ try {
     .waitFor();
   assert.equal(doc.contracts[0].status, "active");
   await admin.locator(".snav [data-view=payments]").click();
-  await admin.getByRole("button", { name: "Nhận cọc", exact: true }).click();
+  await admin
+    .getByRole("button", { name: "Ghi nhận thu", exact: true })
+    .click();
   await admin.locator("#modal [name=amount]").fill("100000");
   await admin
     .getByRole("button", { name: "Lưu thông tin", exact: true })
@@ -268,7 +270,8 @@ try {
     .locator(".contract-row")
     .getByText("Đã trả", { exact: true })
     .waitFor();
-  assert.equal(doc.contracts[0].depositRefunded, 100000);
+  assert.equal(doc.contracts[0].depositRefunded, 0);
+  assert.equal(doc.contracts[0].paid, 100000);
   await admin.setViewportSize({ width: 390, height: 844 });
   assert(
     await admin.evaluate(
@@ -277,7 +280,7 @@ try {
   );
   assert.deepEqual(errors, []);
   console.log(
-    "PASS UI (mock APIs): customer request and estimate, admin review/edit/approval, reservation handover, deposit receipt, return/refund, optimistic revision saves, mobile layout",
+    "PASS UI (mock APIs): customer request and estimate, admin review/edit/approval, reservation handover, advance receipt, return with remaining debt, optimistic revision saves, mobile layout",
   );
 } finally {
   await browser.close();
