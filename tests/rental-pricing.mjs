@@ -63,3 +63,12 @@ assert.equal(
 );
 assert.equal(listingUnitPrice({ unit: "năm", price: 365000 }, "ngày"), 1000);
 assert.throws(() => listingUnitPrice({ unit: "lượt", price: 100000 }, "tháng"));
+
+const { rentalEndFromPeriods: endFrom } = await import(
+  "../src/rental-pricing.js"
+);
+assert.equal(endFrom("2026-11-14", "tháng", 1), "2026-12-13");
+assert.equal(endFrom("2024-02-29", "năm", 1), "2025-02-27");
+assert.equal(endFrom("2026-11-14", "tháng", 0.01), "2026-11-14");
+assert.equal(endFrom("2026-11-14", "năm", 0.01), "2026-11-17");
+assert.throws(() => endFrom("2026-11-14", "năm", 10.01));

@@ -194,6 +194,82 @@ try {
     (await db.query("select count(*)::int n from rental_requests")).rows[0].n,
     3,
   );
+  await db.exec(
+    fs.readFileSync(
+      "supabase/migrations/20261114_auto_booking_end.sql",
+      "utf8",
+    ),
+  );
+  const autoId = crypto.randomUUID();
+  await db.exec("set role anon");
+  const auto = await send({
+    id: autoId,
+    phone: "0999999901",
+    periods: 3,
+    finish: date,
+  });
+  assert.equal(Number(auto.estimated_total), 900000);
+  const yearId = crypto.randomUUID();
+  await send({
+    id: yearId,
+    phone: "0999999902",
+    unit: "năm",
+    periods: 2,
+    finish: date,
+  });
+  await assert.rejects(
+    send({ phone: "0999999903", unit: "năm", periods: 10.01 }),
+    /3650/,
+  );
+  await db.exec("reset role");
+  const expected = (
+    await db.query("select to_char($1::date+89,'YYYY-MM-DD') d", [date])
+  ).rows[0].d;
+  assert.equal(auto.requested_end_date, expected);
+  assert.equal(
+    new Date(
+      (
+        await db.query(
+          "select requested_end_date from rental_requests where id=$1",
+          [autoId],
+        )
+      ).rows[0].requested_end_date,
+    )
+      .toISOString()
+      .slice(0, 10),
+    expected,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select (requested_end_date-requested_start_date+1)::int days from rental_requests where id=$1",
+        [yearId],
+      )
+    ).rows[0].days,
+    730,
+  );
+  // An owner can approve the automatically derived schedule using the same locked path.
+  await db.exec("set role authenticated");
+  const automaticContract = (
+    await db.query(
+      "select review_rental_request_v2($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) r",
+      [
+        shop,
+        autoId,
+        "approve",
+        "Khách",
+        "0999999901",
+        "Địa chỉ",
+        date,
+        expected,
+        1,
+        900000,
+        0,
+        "",
+      ],
+    )
+  ).rows[0].r;
+  assert(automaticContract);
   console.log(
     "PASS SQL v2: date-inclusive/entered-period estimates, fixed unit conversion, server prices, validation/idempotency/privacy, reviewed address and quote snapshots, negotiated total, unchanged existing profile, repeatable migration",
   );

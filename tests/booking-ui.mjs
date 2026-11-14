@@ -84,16 +84,20 @@ try {
     await page.locator("[name=listedPrice]").evaluate((e) => e.readOnly),
     true,
   );
-  const endDate = await page.locator("[name=end]").inputValue();
-  const later = new Date(endDate + "T12:00:00Z");
-  later.setUTCDate(later.getUTCDate() + 2);
-  await page.locator("[name=end]").fill(later.toISOString().slice(0, 10));
-  assert(
-    (await page.locator(".booking-estimate").innerText()).includes(
-      "9.000.000đ",
-    ),
+  assert.equal(await page.locator("[name=end]").isVisible(), false);
+  const initialStart = await page.locator("[name=start]").inputValue();
+  const expectedEnd = new Date(initialStart + "T12:00:00Z");
+  expectedEnd.setUTCDate(expectedEnd.getUTCDate() + 89);
+  assert.equal(
+    await page.locator("[name=end]").inputValue(),
+    expectedEnd.toISOString().slice(0, 10),
   );
   await page.locator("[name=billingUnit]").selectOption("ngày");
+  assert.equal(await page.locator("[name=end]").isVisible(), true);
+  assert.equal(await page.locator("[name=end]").inputValue(), initialStart);
+  const later = new Date(initialStart + "T12:00:00Z");
+  later.setUTCDate(later.getUTCDate() + 2);
+  await page.locator("[name=end]").fill(later.toISOString().slice(0, 10));
   assert.equal(await page.locator("[name=billingPeriods]").isDisabled(), true);
   assert(
     (await page.locator(".booking-estimate").innerText()).startsWith(

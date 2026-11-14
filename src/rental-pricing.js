@@ -59,3 +59,25 @@ export function listingUnitPrice(asset, target) {
     throw Error("Đơn giá vượt giới hạn, vui lòng liên hệ shop.");
   return amount;
 }
+
+export function rentalEndFromPeriods(start, unit, periods) {
+  rentalPeriods(start, start, "ngày");
+  if (!["tháng", "năm"].includes(unit))
+    throw Error("Chỉ tự tính ngày kết thúc cho tháng/năm.");
+  const n = Number(periods);
+  if (
+    !Number.isFinite(n) ||
+    n <= 0 ||
+    n > 10000 ||
+    Math.abs(n * 100 - Math.round(n * 100)) > 1e-7
+  )
+    throw Error("Hãy nhập số tháng/năm hợp lệ, tối đa 2 chữ số thập phân.");
+  const days = Math.ceil(
+    (Math.round(n * 100) * (unit === "tháng" ? 30 : 365)) / 100,
+  );
+  if (days > 3650)
+    throw Error("Thời gian thuê tối đa 3.650 ngày (10 năm quy ước).");
+  const end = new Date(start + "T12:00:00Z");
+  end.setUTCDate(end.getUTCDate() + days - 1);
+  return end.toISOString().slice(0, 10);
+}

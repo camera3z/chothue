@@ -1,5 +1,9 @@
 import { mountDatePickers } from "./date-picker.js";
-import { rentalQuote, listingUnitPrice } from "./rental-pricing.js";
+import {
+  rentalQuote,
+  listingUnitPrice,
+  rentalEndFromPeriods,
+} from "./rental-pricing.js";
 const esc = (s) =>
   String(s ?? "").replace(
     /[&<>"']/g,
@@ -21,7 +25,7 @@ export function openBookingRequest(db, shop, asset) {
   const initialUnit = ["ngày", "tháng", "năm", "lượt"].includes(asset.unit)
     ? asset.unit
     : "ngày";
-  dialog.innerHTML = `<form><div class="modal-title"><h2>Đặt thuê · ${esc(asset.name)}</h2><button type="button" data-close aria-label="Đóng">×</button></div><p class="footnote">Đây là yêu cầu chờ shop xác nhận, chưa giữ chỗ và chưa phát sinh thanh toán.</p><label>Họ tên<input name="name" required minlength="2" maxlength="120" autocomplete="name"></label><label>Số điện thoại<input name="phone" type="tel" required minlength="9" maxlength="24" autocomplete="tel"></label><label>Địa chỉ<textarea name="address" maxlength="500" autocomplete="street-address" placeholder="Số nhà, đường, phường/xã, tỉnh/thành…"></textarea></label><div class="form-grid"><label>Ngày bắt đầu<input type="date" name="start" required min="${selectedToday}" value="${selectedToday}"></label><label>Ngày kết thúc<input type="date" name="end" required min="${selectedToday}" value="${selectedToday}"></label></div><label>Số lượng tài sản<input name="quantity" type="number" required min="1" max="10000" step="1" value="1"></label><div class="form-grid"><label>Đơn giá niêm yết (khách không sửa)<span class="currency-control"><input name="listedPrice" type="text" readonly><span class="currency-suffix" aria-hidden="true">₫</span></span></label><label>Tính theo<select name="billingUnit">${(asset.unit === "lượt" ? ["lượt"] : ["ngày", "tháng", "năm"]).map((u) => `<option ${u === initialUnit ? "selected" : ""}>${u}</option>`).join("")}</select></label></div><label id="public-periods-field" hidden><span data-public-period-label>Số tháng thuê</span><input name="billingPeriods" type="number" min="0.01" max="10000" step="0.01" value="1" disabled></label><div class="summary-box booking-estimate" role="status"></div><p class="footnote" id="public-price-note"></p><label>Ghi chú<textarea name="note" maxlength="1500" placeholder="Phụ kiện hoặc nhu cầu của bạn…"></textarea></label><div class="booking-honeypot" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div><label class="chk"><input type="checkbox" required name="consent">Tôi đồng ý gửi thông tin để shop liên hệ xác nhận yêu cầu thuê.</label><p class="booking-error" role="alert"></p><div class="modal-actions"><button type="button" data-close>Hủy</button><button class="primary" type="submit">Gửi yêu cầu thuê</button></div></form>`;
+  dialog.innerHTML = `<form><div class="modal-title"><h2>Đặt thuê · ${esc(asset.name)}</h2><button type="button" data-close aria-label="Đóng">×</button></div><p class="footnote">Đây là yêu cầu chờ shop xác nhận, chưa giữ chỗ và chưa phát sinh thanh toán.</p><label>Họ tên<input name="name" required minlength="2" maxlength="120" autocomplete="name"></label><label>Số điện thoại<input name="phone" type="tel" required minlength="9" maxlength="24" autocomplete="tel"></label><label>Địa chỉ<textarea name="address" maxlength="500" autocomplete="street-address" placeholder="Số nhà, đường, phường/xã, tỉnh/thành…"></textarea></label><div class="form-grid booking-date-fields"><label>Ngày bắt đầu<input type="date" name="start" required min="${selectedToday}" value="${selectedToday}"></label><label id="public-end-date-field">Ngày kết thúc<input type="date" name="end" required min="${selectedToday}" value="${selectedToday}"></label></div><label>Số lượng tài sản<input name="quantity" type="number" required min="1" max="10000" step="1" value="1"></label><div class="form-grid"><label>Đơn giá niêm yết (khách không sửa)<span class="currency-control"><input name="listedPrice" type="text" readonly><span class="currency-suffix" aria-hidden="true">₫</span></span></label><label>Tính theo<select name="billingUnit">${(asset.unit === "lượt" ? ["lượt"] : ["ngày", "tháng", "năm"]).map((u) => `<option ${u === initialUnit ? "selected" : ""}>${u}</option>`).join("")}</select></label></div><label id="public-periods-field" hidden><span data-public-period-label>Số tháng thuê</span><input name="billingPeriods" type="number" min="0.01" max="10000" step="0.01" value="1" disabled></label><div class="summary-box booking-estimate" role="status"></div><p class="footnote" id="public-price-note"></p><label>Ghi chú<textarea name="note" maxlength="1500" placeholder="Phụ kiện hoặc nhu cầu của bạn…"></textarea></label><div class="booking-honeypot" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div><label class="chk"><input type="checkbox" required name="consent">Tôi đồng ý gửi thông tin để shop liên hệ xác nhận yêu cầu thuê.</label><p class="booking-error" role="alert"></p><div class="modal-actions"><button type="button" data-close>Hủy</button><button class="primary" type="submit">Gửi yêu cầu thuê</button></div></form>`;
   document.body.append(dialog);
   dialog.addEventListener("close", () => dialog.remove(), { once: true });
   dialog
@@ -30,10 +34,24 @@ export function openBookingRequest(db, shop, asset) {
   const form = dialog.querySelector("form"),
     estimate = dialog.querySelector(".booking-estimate"),
     error = dialog.querySelector(".booking-error");
+  let lastManualEnd = selectedToday,
+    wasAutomaticEnd = false;
   function calculate() {
     const unit = form.querySelector("[name=billingUnit]").value,
       manual = unit !== "ngày";
+    const automaticEnd = ["tháng", "năm"].includes(unit),
+      endInput = form.querySelector("[name=end]");
+    if (automaticEnd && !wasAutomaticEnd) lastManualEnd = endInput.value;
+    if (!automaticEnd && wasAutomaticEnd) endInput.value = lastManualEnd;
+    wasAutomaticEnd = automaticEnd;
+    form.querySelector("#public-end-date-field").hidden = automaticEnd;
+    form
+      .querySelector(".booking-date-fields")
+      .classList.toggle("single-date", automaticEnd);
+    endInput.readOnly = automaticEnd;
+    endInput.required = !automaticEnd;
     const field = form.querySelector("[name=billingPeriods]");
+    field.max = unit === "năm" ? "10" : unit === "tháng" ? "121.66" : "10000";
     form.querySelector("#public-periods-field").hidden = !manual;
     field.disabled = !manual;
     field.required = manual;
@@ -49,7 +67,16 @@ export function openBookingRequest(db, shop, asset) {
         : "Tiền thuê tính theo lịch, gồm cả ngày kết thúc. ") +
       "Đơn giá quy đổi từ giá niêm yết theo 1 tháng = 30 ngày, 1 năm = 365 ngày. Đây là giá dự kiến, shop sẽ xác nhận thỏa thuận và khoản trả trước sau.";
     try {
+      if (automaticEnd)
+        endInput.value = rentalEndFromPeriods(
+          form.querySelector("[name=start]").value,
+          unit,
+          Number(field.value),
+        );
       const d = Object.fromEntries(new FormData(form));
+      if (automaticEnd)
+        form.querySelector("#public-price-note").textContent =
+          `Ngày trả dự kiến: ${d.end.split("-").reverse().join("/")} · Tự tính theo 30 ngày/tháng hoặc 365 ngày/năm, gồm ngày bắt đầu; phần ngày lẻ làm tròn lên. Tổng tiền vẫn theo số kỳ bạn nhập. Shop sẽ xác nhận lại.`;
       const price = listingUnitPrice(asset, unit);
       form.querySelector("[name=listedPrice]").value = new Intl.NumberFormat(
         "vi-VN",
@@ -90,6 +117,14 @@ export function openBookingRequest(db, shop, asset) {
     error.textContent = "";
     try {
       const d = Object.fromEntries(new FormData(form));
+      if (["tháng", "năm"].includes(d.billingUnit)) {
+        d.end = rentalEndFromPeriods(
+          d.start,
+          d.billingUnit,
+          Number(d.billingPeriods),
+        );
+        form.querySelector("[name=end]").value = d.end;
+      }
       const starts = new Date(d.start + "T00:00:00"),
         ends = new Date(d.end + "T00:00:00");
       if (
@@ -124,7 +159,7 @@ export function openBookingRequest(db, shop, asset) {
         request: data.id,
         key: data.cancel_token || "",
       }).toString();
-      form.innerHTML = `<div class="modal-title"><h2>Đã gửi yêu cầu</h2></div><p>Shop sẽ liên hệ số điện thoại bạn đã cung cấp để thỏa thuận và duyệt.</p><p class="code">Mã yêu cầu: ${esc(data.id)}</p>${Number.isFinite(Number(data.estimated_total)) ? `<p>Giá dự kiến từ shop: ${new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(data.estimated_total))}</p>` : ""}<p class="footnote">Yêu cầu chưa giữ chỗ. Không cần gửi lại nếu bạn đã thấy mã xác nhận.</p>${data.cancel_token ? `<label>Liên kết riêng để theo dõi / hủy yêu cầu<input readonly value="${esc(follow.href)}"></label><p class="footnote">Lưu liên kết này và giữ riêng. Bạn có thể tự hủy khi shop chưa duyệt.</p><a class="btn" target="_blank" rel="noopener" href="${esc(follow.href)}">Theo dõi yêu cầu</a>` : ""}<button class="btn pri" type="button">Đóng</button>`;
+      form.innerHTML = `<div class="modal-title"><h2>Đã gửi yêu cầu</h2></div><p>Shop sẽ liên hệ số điện thoại bạn đã cung cấp để thỏa thuận và duyệt.</p><p class="code">Mã yêu cầu: ${esc(data.id)}</p>${data.requested_end_date ? `<p>Ngày trả dự kiến: ${esc(data.requested_end_date.split("-").reverse().join("/"))}</p>` : ""}${Number.isFinite(Number(data.estimated_total)) ? `<p>Giá dự kiến từ shop: ${new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(data.estimated_total))}</p>` : ""}<p class="footnote">Yêu cầu chưa giữ chỗ. Không cần gửi lại nếu bạn đã thấy mã xác nhận.</p>${data.cancel_token ? `<label>Liên kết riêng để theo dõi / hủy yêu cầu<input readonly value="${esc(follow.href)}"></label><p class="footnote">Lưu liên kết này và giữ riêng. Bạn có thể tự hủy khi shop chưa duyệt.</p><a class="btn" target="_blank" rel="noopener" href="${esc(follow.href)}">Theo dõi yêu cầu</a>` : ""}<button class="btn pri" type="button">Đóng</button>`;
       form.querySelector("button").onclick = () => dialog.close();
     } catch (err) {
       error.textContent =

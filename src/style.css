@@ -2020,3 +2020,4 @@ dialog.calendar-picker {
   }
 }
 #public-periods-field[hidden]{display:none!important}
+#public-end-date-field[hidden]{display:none!important}.booking-date-fields.single-date{grid-template-columns:1fr}
