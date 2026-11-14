@@ -1979,4 +1979,43 @@ dialog.calendar-picker {
   font-weight: 500;
   min-width: 65px;
 }
-#billing-periods-field[hidden]{display:none!important}
+#billing-periods-field[hidden] {
+  display: none !important;
+}
+.rental-customer-info {
+  margin: 18px 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--raise);
+}
+.rental-customer-info h3 {
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+.rental-customer-info dl {
+  margin: 0;
+  display: grid;
+  gap: 10px;
+  font-size: 12px;
+}
+.rental-customer-info dl > div {
+  display: grid;
+  grid-template-columns: 105px minmax(0, 1fr);
+  gap: 12px;
+}
+.rental-customer-info dt {
+  color: var(--muted);
+}
+.rental-customer-info dd {
+  margin: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+@media (max-width: 480px) {
+  .rental-customer-info dl > div {
+    grid-template-columns: 90px minmax(0, 1fr);
+    gap: 8px;
+  }
+}

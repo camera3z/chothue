@@ -554,13 +554,13 @@ function content() {
     return `<div class="list">${
       state.customers
         .filter((c) =>
-          [c.name, c.phone, c.email].join(" ").toLowerCase().includes(q),
+          [c.name, c.phone, c.address].join(" ").toLowerCase().includes(q),
         )
         .map((c) => {
           const contracts = state.contracts.filter(
             (x) => x.customerId === c.id,
           );
-          return `<div class="row customer-row"><span><span class="r-top"><b>${esc(c.name)}</b></span><span class="r-sub">${esc(c.phone)}${c.email ? " · " + esc(c.email) : ""}</span></span><span class="r-end"><span class="amt">${money(contracts.reduce((n, x) => n + x.total, 0))}</span><span class="r-sub">${contracts.length} đơn thuê</span></span></div>`;
+          return `<div class="row customer-row"><span><span class="r-top"><b>${esc(c.name)}</b></span><span class="r-sub">${esc(c.phone)}${c.address ? " · " + esc(c.address) : ""}</span></span><span class="r-end"><span class="amt">${money(contracts.reduce((n, x) => n + x.total, 0))}</span><span class="r-sub">${contracts.length} đơn thuê</span><button class="btn sm" data-edit-customer="${c.id}">Sửa thông tin</button></span></div>`;
         })
         .join("") ||
       '<div class="empty"><b>Chưa có khách hàng phù hợp</b>Thêm khách thuê mới để bắt đầu.</div>'
@@ -754,6 +754,10 @@ function bind() {
       openRequestReview(d.reviewRequest);
       return;
     }
+    if (d.editCustomer) {
+      openCustomer(d.editCustomer);
+      return;
+    }
     if (d.editReservation) {
       editReservation(d.editReservation);
       return;
@@ -911,6 +915,30 @@ function modal(title, body, onSubmit) {
   );
   el.showModal();
 }
+function openCustomer(id) {
+  const customer = state.customers.find((c) => c.id === id);
+  modal(
+    customer ? "Sửa thông tin khách thuê" : "Thêm khách thuê",
+    `${input("Tên cá nhân / doanh nghiệp", "name", "text", `maxlength="120" value="${esc(customer?.name || "")}"`)}${input("Số điện thoại", "phone", "tel", `maxlength="30" value="${esc(customer?.phone || "")}"`)}<label>Địa chỉ<textarea name="address" maxlength="500" placeholder="Số nhà, đường, phường/xã, tỉnh/thành…">${esc(customer?.address || "")}</textarea></label>`,
+    async (d) => {
+      const fields = {
+        name: d.name.trim(),
+        phone: d.phone.trim(),
+        address: d.address.trim(),
+      };
+      if (!fields.name || !fields.phone)
+        throw Error("Hãy nhập tên và số điện thoại.");
+      const next = structuredClone(state);
+      if (customer)
+        Object.assign(
+          next.customers.find((c) => c.id === id),
+          fields,
+        );
+      else next.customers.push({ ...fields, id: crypto.randomUUID() });
+      await save(next);
+    },
+  );
+}
 function openForm(type) {
   if (type === "asset")
     modal(
@@ -930,16 +958,7 @@ function openForm(type) {
         await commitAssetPhoto(next, file, id);
       },
     );
-  if (type === "customer")
-    modal(
-      "Thêm khách thuê",
-      `${input("Tên cá nhân / doanh nghiệp", "name")}${input("Số điện thoại", "phone", "tel")}<label>Email (không bắt buộc)<input name="email" type="email"></label>`,
-      async (d) => {
-        const n = structuredClone(state);
-        n.customers.push({ ...d, id: crypto.randomUUID() });
-        await save(n);
-      },
-    );
+  if (type === "customer") openCustomer();
   if (type === "contract") {
     if (!state.assets.length || !state.customers.length)
       return toast("Hãy thêm tài sản và khách thuê trước.");
@@ -1179,8 +1198,10 @@ function openRefund(id) {
 }
 function openDetail(id) {
   const c = state.contracts.find((x) => x.id === id);
+  const customer = state.customers.find((x) => x.id === c.customerId);
+  const customerInfo = `<section class="rental-customer-info"><h3>Thông tin khách hàng</h3><dl><div><dt>Họ tên</dt><dd>${esc(c.agreedCustomerName || customer?.name || "Chưa cung cấp")}</dd></div><div><dt>Số điện thoại</dt><dd>${esc(c.agreedPhone || customer?.phone || "Chưa cung cấp")}</dd></div><div><dt>Địa chỉ</dt><dd>${esc(c.agreedAddress || customer?.address || "Chưa cung cấp")}</dd></div></dl></section>`;
   const el = document.querySelector("#modal");
-  el.innerHTML = `<div class="modal-title"><div><span class="eyebrow">HỒ SƠ CHO THUÊ</span><h2>${esc(c.code)}</h2></div><button id="close" aria-label="Đóng">×</button></div><div class="summary-box"><h3>${esc(assetName(c.assetId))}</h3><p>${esc(c.agreedCustomerName || customerName(c.customerId))} · ${c.quantity} đơn vị</p><p>Giao ${dateLabel(c.start)} → Hẹn trả ${dateLabel(c.end)}</p></div><div class="detail-money"><div>Tiền thuê<strong>${money(c.total)}</strong></div><div>Đã thu<strong>${money(c.paid)}</strong></div>${held(c) > 0 ? `<div>Cọc bảo đảm cũ<strong>${money(held(c))}</strong></div>` : ""}</div><p class="footnote">${c.rentalStart ? `Thời gian: ${esc(new Date(c.rentalStart).toLocaleString("vi-VN"))} → ${esc(new Date(c.rentalEnd).toLocaleString("vi-VN"))}` : ""}${c.depositRequired ? ` · Khoản trả trước thỏa thuận ${money(c.depositRequired)}` : ""}</p><p class="footnote">${c.billingUnit ? `Đơn giá hợp đồng: ${money(c.unitPrice)} / ${esc(c.billingUnit)} · ${c.billingMethod === "fixed_days" ? `${c.billingDays} ngày / ${c.billingBasis} ngày mỗi kỳ` : `${c.periods} ${esc(c.billingUnit)}`} ` : ""}</p><h3>Ghi chú bàn giao</h3><p class="note-text">${esc(c.handoverNote || "Chưa có ghi chú")}</p><h3>Ghi chú nhận trả</h3><p class="note-text">${esc(c.returnNote || "Chưa nhận trả")}</p><h3>Lịch sử thu · hoàn tiền</h3>${
+  el.innerHTML = `<div class="modal-title"><div><span class="eyebrow">HỒ SƠ CHO THUÊ</span><h2>${esc(c.code)}</h2></div><button id="close" aria-label="Đóng">×</button></div><div class="summary-box"><h3>${esc(assetName(c.assetId))}</h3><p>${esc(c.agreedCustomerName || customerName(c.customerId))} · ${c.quantity} đơn vị</p><p>Giao ${dateLabel(c.start)} → Hẹn trả ${dateLabel(c.end)}</p></div>${customerInfo}<div class="detail-money"><div>Tiền thuê<strong>${money(c.total)}</strong></div><div>Đã thu<strong>${money(c.paid)}</strong></div>${held(c) > 0 ? `<div>Cọc bảo đảm cũ<strong>${money(held(c))}</strong></div>` : ""}</div><p class="footnote">${c.rentalStart ? `Thời gian: ${esc(new Date(c.rentalStart).toLocaleString("vi-VN"))} → ${esc(new Date(c.rentalEnd).toLocaleString("vi-VN"))}` : ""}${c.depositRequired ? ` · Khoản trả trước thỏa thuận ${money(c.depositRequired)}` : ""}</p><p class="footnote">${c.billingUnit ? `Đơn giá hợp đồng: ${money(c.unitPrice)} / ${esc(c.billingUnit)} · ${c.billingMethod === "fixed_days" ? `${c.billingDays} ngày / ${c.billingBasis} ngày mỗi kỳ` : `${c.periods} ${esc(c.billingUnit)}`} ` : ""}</p><h3>Ghi chú bàn giao</h3><p class="note-text">${esc(c.handoverNote || "Chưa có ghi chú")}</p><h3>Ghi chú nhận trả</h3><p class="note-text">${esc(c.returnNote || "Chưa nhận trả")}</p><h3>Lịch sử thu · hoàn tiền</h3>${
     (c.transactions || []).length
       ? table(
           ["Ngày", "Loại", "Số tiền"],
