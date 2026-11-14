@@ -168,6 +168,7 @@ export function openBookingRequest(db, shop, asset) {
     }
   };
   dialog.showModal();
+  return dialog;
 }
 export { localInput };
 

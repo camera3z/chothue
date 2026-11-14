@@ -83,6 +83,15 @@ try {
     0,
   );
   await page.locator("#public-category").selectOption("all");
+  await page.locator("[data-book]").first().click();
+  await page.locator('.booking-request-dialog input[name="name"]').fill("Khách đang nhập");
+  const beforeBookingPoll = calls.length;
+  await page.clock.fastForward(60000);
+  assert.equal(calls.length, beforeBookingPoll, "Do not poll while booking is open");
+  assert.equal(await page.locator('.booking-request-dialog input[name="name"]').inputValue(), "Khách đang nhập");
+  const closeRefresh = page.waitForResponse((r) => r.url().includes("get_public_storefront"));
+  await page.locator('.booking-request-dialog [data-close]').first().click();
+  await closeRefresh;
   rented = true;
   const rentedResponse = page.waitForResponse((r) =>
     r.url().includes("get_public_storefront"),

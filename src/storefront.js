@@ -97,22 +97,36 @@ export async function renderStorefront(db, shopId) {
       category = e.target.value;
       root.querySelector("#public-assets").innerHTML = cards();
     };
+    let bookingDialog = null;
+    let bookingRevision = 0;
+    let refreshAfterClose = false;
     root.querySelector("#public-assets").onclick = (e) => {
       const button = e.target.closest("[data-book]");
       if (button) {
         const asset = assets.find((a) => a.id === button.dataset.book);
-        if (asset) openBookingRequest(db, shopId, asset);
+        if (asset) {
+          bookingRevision++;
+          bookingDialog = openBookingRequest(db, shopId, asset);
+          bookingDialog.addEventListener("close", () => {
+            bookingDialog = null;
+            refreshAfterClose = true;
+            refresh();
+          }, { once: true });
+        }
       }
     };
     let refreshing = false;
     let imageExpiry = Date.now() + 45 * 60000;
     const refresh = async () => {
-      if (refreshing || document.hidden) return;
+      if (refreshing || document.hidden || bookingDialog?.open) return;
+      refreshAfterClose = false;
+      const revision = bookingRevision;
       refreshing = true;
       try {
         const response = await db.rpc("get_public_storefront", {
           p_shop: shopId,
         });
+        if (bookingDialog?.open || revision !== bookingRevision) return;
         if (response.error) throw response.error;
         if (!response.data) {
           assets = [];
@@ -142,6 +156,7 @@ export async function renderStorefront(db, shopId) {
           for (const item of images.data || [])
             if (item.signedUrl) urls.set(item.path, item.signedUrl);
         }
+        if (bookingDialog?.open || revision !== bookingRevision) return;
         const categories = [...new Set(assets.map((a) => a.category))];
         if (category !== "all" && !categories.includes(category))
           category = "all";
@@ -158,10 +173,12 @@ export async function renderStorefront(db, shopId) {
         root.querySelector("footer").textContent =
           "Rentbook · Tự cập nhật mỗi 30 giây. Vui lòng xác nhận với shop trước khi thuê.";
       } catch {
+        if (bookingDialog?.open || revision !== bookingRevision) return;
         root.querySelector("footer").textContent =
           "Chưa cập nhật được tình trạng mới nhất. Vui lòng tải lại trang hoặc liên hệ shop.";
       } finally {
         refreshing = false;
+        if (refreshAfterClose && !bookingDialog?.open && !document.hidden) refresh();
       }
     };
     const interval = setInterval(refresh, 30000);
