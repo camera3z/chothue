@@ -1029,7 +1029,8 @@ function bindContractPricing() {
         Number(d.quantity),
       );
       const days=rentalPeriods(d.start,d.end,'ngày');
-      summary.innerHTML=`<span class="contract-duration">Thời gian thuê: <b>${days} ngày</b> · ${esc(dateLabel(d.start))} – ${esc(dateLabel(d.end))}</span><strong class="contract-formula">${q.periods} ${esc(d.billingUnit)} × ${money(Number(d.unitPrice))}${Number(d.quantity)>1?` × ${Number(d.quantity)} tài sản`:''} = <span>${money(q.total)}</span></strong>`;
+      const compactMoney=n=>new Intl.NumberFormat('vi-VN',{maximumFractionDigits:0}).format(n)+'đ';
+      summary.innerHTML=`<strong class="contract-formula">Số ${esc(d.billingUnit)} đã thuê: ${q.periods} × Đơn giá: ${compactMoney(Number(d.unitPrice))}${Number(d.quantity)>1?` × ${Number(d.quantity)} tài sản`:''} = <span>${compactMoney(q.total)}</span></strong>${d.billingUnit!=='ngày'?`<span class="contract-duration">Theo lịch: ${days} ngày · ${esc(dateLabel(d.start))} – ${esc(dateLabel(d.end))}</span>`:''}`;
     } catch (e) {
       summary.textContent = e.message;
     }
