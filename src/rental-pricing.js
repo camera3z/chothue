@@ -16,8 +16,21 @@ export function rentalPeriods(start, end, unit) {
   const days = (b - a) / 86400000 + 1;
   return days / (unit === "tháng" ? 30 : unit === "năm" ? 365 : 1);
 }
-export function rentalQuote(start, end, unit, price, quantity) {
-  const periods = rentalPeriods(start, end, unit);
+export function rentalQuote(start, end, unit, price, quantity, enteredPeriods) {
+  const scheduledPeriods = rentalPeriods(start, end, unit);
+  let periods = scheduledPeriods;
+  if (unit !== "ngày" && enteredPeriods !== undefined) {
+    periods = Number(enteredPeriods);
+    if (
+      !Number.isFinite(periods) ||
+      periods <= 0 ||
+      periods > 10000 ||
+      Math.abs(periods * 100 - Math.round(periods * 100)) > 1e-7
+    )
+      throw Error(
+        "Số tháng/năm phải lớn hơn 0, tối đa 10.000 và có tối đa 2 chữ số thập phân.",
+      );
+  }
   if (
     !Number.isSafeInteger(price) ||
     price < 0 ||

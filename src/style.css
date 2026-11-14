@@ -1979,3 +1979,4 @@ dialog.calendar-picker {
   font-weight: 500;
   min-width: 65px;
 }
+#billing-periods-field[hidden]{display:none!important}

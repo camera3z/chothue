@@ -21,12 +21,24 @@ try {
   await page.locator("[name=billingUnit]").selectOption("tháng");
   assert(
     (await page.locator(".contract-formula").innerText()).startsWith(
-      "31 ngày × (300.000đ / 30 ngày)",
+      "1 tháng × 300.000đ",
     ),
   );
   assert(
-    (await page.locator(".contract-formula").innerText()).includes("310.000đ"),
+    (await page.locator(".contract-formula").innerText()).includes("300.000đ"),
   );
+  await page.locator("[name=end]").fill("2026-11-22");
+  await page.locator("[name=billingPeriods]").fill("3");
+  assert(
+    (await page.locator(".contract-formula").innerText()).includes(
+      "3 tháng × 300.000đ = 900.000đ",
+    ),
+  );
+  await page.locator("[name=end]").fill("2026-11-14");
+  assert(
+    (await page.locator(".contract-formula").innerText()).includes("900.000đ"),
+  );
+  await page.locator("[name=billingPeriods]").fill("1");
   await page.locator("[name=end]").fill("2026-11-22");
   await page.locator("[name=billingUnit]").selectOption("ngày");
   await page.locator("[name=unitPrice]").fill("100000");
@@ -61,10 +73,16 @@ try {
   await page.locator("[name=billingUnit]").selectOption("tháng");
   assert(
     (await page.locator("#contract-price-summary").innerText()).includes(
-      "60.000",
+      "200.000",
     ),
   );
   await page.locator("[name=billingUnit]").selectOption("năm");
+  await page.locator("[name=billingPeriods]").fill("2");
+  assert(
+    (await page.locator(".contract-formula").innerText()).startsWith(
+      "2 năm × 100.000đ",
+    ),
+  );
   await page.locator("[name=paid]").fill("0");
   await page
     .getByRole("button", { name: "Lưu thông tin", exact: true })
@@ -75,8 +93,10 @@ try {
   );
   assert.equal(state.contracts[0].unitPrice, 100000);
   assert.equal(state.contracts[0].billingUnit, "năm");
-  assert.equal(state.contracts[0].periods, 9 / 365);
-  assert.equal(state.contracts[0].total, 4932);
+  assert.equal(state.contracts[0].periods, 2);
+  assert.equal(state.contracts[0].total, 400000);
+  assert.equal(state.contracts[0].billingMethod, "manual_periods");
+  assert.equal(state.contracts[0].billingDays, 9);
   assert.equal(state.assets[0].price, 450000);
   await page.locator(".snav [data-view=assets]").click();
   await page.locator("[data-rentasset=a3]").click();

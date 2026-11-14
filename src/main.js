@@ -966,7 +966,7 @@ function openForm(type) {
       return toast("Hãy thêm tài sản và khách thuê trước.");
     modal(
       "Tạo hợp đồng",
-      `<label>Khách thuê<select name="customerId">${state.customers.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select></label><label>Tài sản<select name="assetId">${state.assets.map((a) => `<option value="${a.id}" ${available(a) < 1 ? "disabled" : ""}>${esc(a.name)} · Còn ${available(a)}</option>`).join("")}</select></label><div class="form-grid">${input("Ngày bắt đầu", "start", "date", `value="${today()}"`)}${input("Ngày kết thúc", "end", "date", `value="${today()}"`)}</div>${input("Số lượng tài sản", "quantity", "number", 'value="1" min="1" max="10000" step="1"')}<div class="form-grid">${input("Đơn giá thỏa thuận (₫)", "unitPrice", "number", 'value="0" min="0" max="100000000000" step="1"')}<label>Tính theo<select name="billingUnit"><option>ngày</option><option>tháng</option><option>năm</option></select></label></div><div class="summary-box" id="contract-price-summary" role="status"></div><p class="footnote">Tính cả ngày kết thúc. Quy ước cố định: 1 tháng = 30 ngày, 1 năm = 365 ngày; phần lẻ tính theo ngày, không làm tròn lên cả kỳ. Tổng tiền làm tròn đến đồng. Đơn giá này chỉ áp dụng cho hợp đồng, không thay giá tài sản.</p>${input("Tiền thuê đã thu (₫)", "paid", "number", 'value="0" min="0" step="1000"')}${input("Tiền cọc đã nhận (₫)", "deposit", "number", 'value="0" min="0" step="1000"')}<label>Ghi chú bàn giao<textarea name="handoverNote" placeholder="Phụ kiện đi kèm, tình trạng tài sản, địa chỉ giao…"></textarea></label>`,
+      `<label>Khách thuê<select name="customerId">${state.customers.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select></label><label>Tài sản<select name="assetId">${state.assets.map((a) => `<option value="${a.id}" ${available(a) < 1 ? "disabled" : ""}>${esc(a.name)} · Còn ${available(a)}</option>`).join("")}</select></label><div class="form-grid">${input("Ngày bắt đầu", "start", "date", `value="${today()}"`)}${input("Ngày kết thúc", "end", "date", `value="${today()}"`)}</div>${input("Số lượng tài sản", "quantity", "number", 'value="1" min="1" max="10000" step="1"')}<div class="form-grid">${input("Đơn giá thỏa thuận (₫)", "unitPrice", "number", 'value="0" min="0" max="100000000000" step="1"')}<label>Tính theo<select name="billingUnit"><option>ngày</option><option>tháng</option><option>năm</option></select></label></div><label id="billing-periods-field" hidden><span data-periods-label>Số tháng thuê</span><input name="billingPeriods" type="number" min="0.01" max="10000" step="0.01" value="1" disabled></label><div class="summary-box" id="contract-price-summary" role="status"></div><p class="footnote" id="contract-pricing-note"></p>${input("Tiền thuê đã thu (₫)", "paid", "number", 'value="0" min="0" step="1000"')}${input("Tiền cọc đã nhận (₫)", "deposit", "number", 'value="0" min="0" step="1000"')}<label>Ghi chú bàn giao<textarea name="handoverNote" placeholder="Phụ kiện đi kèm, tình trạng tài sản, địa chỉ giao…"></textarea></label>`,
       async (d) => {
         if (d.end < d.start)
           throw Error("Ngày kết thúc phải từ ngày bắt đầu trở đi.");
@@ -979,6 +979,7 @@ function openForm(type) {
           d.billingUnit,
           Number(d.unitPrice),
           Number(d.quantity),
+          d.billingUnit === "ngày" ? undefined : Number(d.billingPeriods),
         );
         if (Number(d.paid) > total)
           throw Error("Tiền đã thu không được vượt tổng hợp đồng.");
@@ -990,7 +991,9 @@ function openForm(type) {
           quantity: Number(d.quantity),
           unitPrice: Number(d.unitPrice),
           billingUnit: d.billingUnit,
-          billingMethod: "fixed_days",
+          billingMethod:
+            d.billingUnit === "ngày" ? "fixed_days" : "manual_periods",
+          billingPeriods: d.billingUnit === "ngày" ? null : periods,
           billingDays: rentalPeriods(d.start, d.end, "ngày"),
           billingBasis:
             d.billingUnit === "tháng" ? 30 : d.billingUnit === "năm" ? 365 : 1,
@@ -1025,6 +1028,17 @@ function bindContractPricing() {
   const form = document.querySelector("#modal form");
   const summary = form.querySelector("#contract-price-summary");
   const update = () => {
+    const unit = form.querySelector("[name=billingUnit]").value;
+    const manual = unit !== "ngày";
+    form.querySelector("#billing-periods-field").hidden = !manual;
+    const count = form.querySelector("[name=billingPeriods]");
+    count.disabled = !manual;
+    count.required = manual;
+    form.querySelector("[data-periods-label]").textContent =
+      unit === "năm" ? "Số năm thuê" : "Số tháng thuê";
+    form.querySelector("#contract-pricing-note").textContent = manual
+      ? "Tổng tiền tính theo số tháng/năm bạn nhập, không phụ thuộc lịch. Lịch vẫn dùng để ghi nhận giao–trả và kiểm tra trùng tài sản. Quy ước 1 tháng = 30 ngày, 1 năm = 365 ngày."
+      : "Tổng tiền tính theo số ngày trong lịch, gồm cả ngày kết thúc. Đơn giá chỉ áp dụng cho hợp đồng, không thay giá tài sản.";
     try {
       const d = readMoneyForm(form);
       const q = rentalQuote(
@@ -1033,14 +1047,15 @@ function bindContractPricing() {
         d.billingUnit,
         Number(d.unitPrice),
         Number(d.quantity),
+        d.billingUnit === "ngày" ? undefined : Number(d.billingPeriods),
       );
-      const days = rentalPeriods(d.start, d.end, "ngày");
       const compactMoney = (n) =>
         new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 }).format(n) +
         "đ";
-      const basis =
-        d.billingUnit === "tháng" ? 30 : d.billingUnit === "năm" ? 365 : 1;
-      summary.innerHTML = `<strong class="contract-formula">${days} ngày × ${basis === 1 ? compactMoney(Number(d.unitPrice)) : `(${compactMoney(Number(d.unitPrice))} / ${basis} ngày)`}${Number(d.quantity) > 1 ? ` × ${Number(d.quantity)} tài sản` : ""} = <span>${compactMoney(q.total)}</span></strong>`;
+      const displayCount = new Intl.NumberFormat("vi-VN", {
+        maximumFractionDigits: 2,
+      }).format(q.periods);
+      summary.innerHTML = `<strong class="contract-formula">${displayCount} ${esc(d.billingUnit)} × ${compactMoney(Number(d.unitPrice))}${Number(d.quantity) > 1 ? ` × ${Number(d.quantity)} tài sản` : ""} = <span>${compactMoney(q.total)}</span></strong>`;
     } catch (e) {
       summary.textContent = e.message;
     }

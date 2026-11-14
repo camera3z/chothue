@@ -119,7 +119,7 @@ Kiểm tra SQL local: `node tests/booking-sql.mjs` dùng migration thật trong 
 
 ## Đơn giá riêng khi tạo hợp đồng thủ công
 
-Form Tạo hợp đồng thay ô Số đơn vị tính tiền bằng Đơn giá thỏa thuận và lựa chọn ngày/tháng/năm. Tự tính số kỳ và tổng tiền = đơn giá nhập × số tài sản × số kỳ, hiển thị ngay trước khi lưu. Tính cả ngày cuối; 1 tháng luôn bằng 30 ngày và 1 năm luôn bằng 365 ngày, không thay đổi theo tháng hay năm nhuận. Phần lẻ chia theo ngày, không làm tròn lên cả kỳ; tổng tiền làm tròn đến đồng. Đơn giá mặc định lấy từ tài sản nếu đơn vị phù hợp; với đơn vị giờ/tuần/lượt cũ phải nhập lại giá theo ngày/tháng/năm. Chọn đơn vị mới không tự quy đổi tiền.
+Form Tạo hợp đồng thay ô Số đơn vị tính tiền bằng Đơn giá thỏa thuận và lựa chọn ngày/tháng/năm. Chọn ngày thì tự tính số ngày theo lịch; chọn tháng/năm thì nhập số tháng/năm riêng. Tổng tiền = đơn giá nhập × số tài sản × số kỳ đã xác định, hiển thị ngay trước khi lưu. Đơn vị ngày tính cả ngày cuối. Đơn vị tháng/năm lấy số người dùng nhập, lịch không quyết định tổng tiền. Quy ước tham chiếu 1 tháng = 30 ngày, 1 năm = 365 ngày vẫn giữ nguyên nhưng không tự quy đổi lịch thành số kỳ cho hợp đồng thủ công mới. Tổng tiền làm tròn đến đồng. Đơn giá mặc định lấy từ tài sản nếu đơn vị phù hợp; với đơn vị giờ/tuần/lượt cũ phải nhập lại giá theo ngày/tháng/năm. Chọn đơn vị mới không tự quy đổi tiền.
 
 Lưu snapshot `unitPrice`, `billingUnit`, `periods` trên hợp đồng, không thay đơn giá tài sản hoặc tổng tiền của hợp đồng cũ. Thay đổi này không sửa giá dự kiến ở form đặt thuê công khai và không thay giới hạn thời lượng ở server. Không cần migration SQL. Kiểm tra công thức: `node tests/rental-pricing.mjs`; kiểm tra form demo: `CHROMIUM_PATH=/usr/bin/chromium node tests/contract-pricing-ui.mjs` (server demo cổng 5174).
 
@@ -134,6 +134,13 @@ Các ô date trong hộp thoại quản trị dùng lịch tùy chỉnh có nút
 
 ## Quy ước cố định 30/365 ngày
 
-Áp dụng cho hợp đồng thủ công mới: tổng = làm tròn(đơn giá × số lượng × số ngày / 30 nếu tháng, / 365 nếu năm). Ngày tính cả ngày cuối như trước; 14/11–14/12 là 31 ngày, đơn giá 300.000đ/tháng thành 310.000đ, không phải 2 tháng. Thuê 30 ngày là đúng một tháng. Năm nhuận vẫn chia 365. Snapshot billingMethod=fixed_days, billingDays và billingBasis lưu quy tắc cho hợp đồng mới; không sửa tổng tiền lịch sử.
+Cách tính fixed_days đã dùng trước đây (hợp đồng cũ giữ nguyên; hợp đồng thủ công mới tháng/năm dùng số kỳ nhập bên dưới): tổng = làm tròn(đơn giá × số lượng × số ngày / 30 nếu tháng, / 365 nếu năm). Ngày tính cả ngày cuối như trước; 14/11–14/12 là 31 ngày, đơn giá 300.000đ/tháng thành 310.000đ, không phải 2 tháng. Thuê 30 ngày là đúng một tháng. Năm nhuận vẫn chia 365. Snapshot billingMethod=fixed_days, billingDays và billingBasis lưu quy tắc cho hợp đồng mới; không sửa tổng tiền lịch sử.
 
 Chạy `supabase/migrations/20261114_fixed_billing.sql` để đồng bộ giá dự kiến yêu cầu thuê mới ở backend với frontend. Request dùng timestamp bắt đầu/kết thúc nên tính số ngày bằng làm tròn lên thời lượng 24 giờ (khác hợp đồng chỉ nhập date tính cả ngày cuối), rồi chia 30/365; đơn giá giờ/tuần/lượt giữ cách cũ. Chỉ ước tính mới thay đổi; yêu cầu/hợp đồng đã lưu giữ nguyên, quản trị vẫn chốt tổng giá thỏa thuận.
+
+
+## Số tháng/năm nhập thủ công
+
+Trong Tạo hợp đồng, đơn vị tháng/năm hiện ô Số tháng thuê/Số năm thuê (mặc định 1, lớn hơn 0, tối đa 10.000, tối đa 2 chữ số thập phân). Tổng tiền = số kỳ nhập × đơn giá × số tài sản; ngày bắt đầu/kết thúc không ảnh hưởng tiền nhưng vẫn phải hợp lệ và vẫn dùng kiểm tra lịch/tồn trên server. Đơn vị ngày ẩn/vô hiệu ô này và tiếp tục lấy số ngày từ lịch. Thay đổi ngày không tự thay số kỳ đã nhập, không tự đẩy ngày trả khi tăng số kỳ.
+
+Hợp đồng mới lưu billingMethod=manual_periods cho tháng/năm, periods/billingPeriods là số nhập, billingDays là số ngày theo lịch chỉ để tham chiếu. Dữ liệu cũ và giá dự kiến ở form đặt thuê công khai không bị sửa. Không cần thêm SQL; kiểm thử công thức và UI ở tests/rental-pricing.mjs, tests/contract-pricing-ui.mjs.
