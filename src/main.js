@@ -1,4 +1,5 @@
 import "./style.css";
+import { readMoneyForm, mountMoneyInputs } from "./money-input.js";
 import { rentalQuote } from "./rental-pricing.js";
 import { localInput } from "./booking-request.js";
 import { renderStorefront } from "./storefront.js";
@@ -867,8 +868,19 @@ async function mutate(fn) {
     toast(e.message);
   }
 }
+const moneyFields = new Set([
+  "price",
+  "unitPrice",
+  "paid",
+  "deposit",
+  "total",
+  "amount",
+  "refund",
+]);
 const input = (label, name, type = "text", extra = "") =>
-  `<label>${label}<input name="${name}" type="${type}" ${extra} required></label>`;
+  type === "number" && moneyFields.has(name)
+    ? `<label>${label}<span class="currency-control"><input name="${name}" type="text" inputmode="numeric" data-money ${extra} required><span class="currency-suffix" aria-hidden="true">₫</span></span></label>`
+    : `<label>${label}<input name="${name}" type="${type}" ${extra} required></label>`;
 function modal(title, body, onSubmit) {
   const el = document.querySelector("#modal");
   el.innerHTML = `<form id="entry-form"><div class="modal-title"><h2>${title}</h2><button type="button" id="close">×</button></div>${body}<p id="form-error" role="alert"></p><div class="modal-actions"><button type="button" id="cancel">Hủy</button><button class="primary">Lưu thông tin</button></div></form>`;
@@ -879,7 +891,7 @@ function modal(title, body, onSubmit) {
     const btn = e.submitter;
     btn.disabled = true;
     try {
-      await onSubmit(Object.fromEntries(new FormData(e.target)));
+      await onSubmit(readMoneyForm(e.target));
       el.close();
       toast("Đã lưu thông tin");
     } catch (err) {
@@ -887,6 +899,7 @@ function modal(title, body, onSubmit) {
       btn.disabled = false;
     }
   };
+  mountMoneyInputs(el.querySelector("form"));
   const photoInput = el.querySelector("[name=photo]");
   let previewURL;
   photoInput?.addEventListener("change", async () => {
@@ -1007,7 +1020,7 @@ function bindContractPricing() {
   const summary = form.querySelector("#contract-price-summary");
   const update = () => {
     try {
-      const d = Object.fromEntries(new FormData(form));
+      const d = readMoneyForm(form);
       const q = rentalQuote(
         d.start,
         d.end,
@@ -1038,6 +1051,9 @@ function bindContractPricing() {
         ? a.unit
         : "ngày";
     }
+    form
+      .querySelector("[name=unitPrice]")
+      .dispatchEvent(new Event("input", { bubbles: true }));
     update();
   });
   form.addEventListener("input", update);

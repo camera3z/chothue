@@ -17,6 +17,15 @@ try {
   await page.locator("[name=start]").fill("2026-11-14");
   await page.locator("[name=end]").fill("2026-11-22");
   await page.locator("[name=unitPrice]").fill("100000");
+  assert.equal(await page.locator("[name=unitPrice]").inputValue(), "100.000");
+  await page.locator("[name=unitPrice]").fill("-100");
+  assert.equal(
+    await page.locator("[name=unitPrice]").evaluate((e) => e.checkValidity()),
+    false,
+  );
+  await page.locator("[name=unitPrice]").fill("100.000 ₫");
+  assert.equal(await page.locator("[name=unitPrice]").inputValue(), "100.000");
+
   await page.locator("[name=billingUnit]").selectOption("ngày");
   await page.locator("[name=quantity]").fill("2");
   assert(
@@ -47,7 +56,10 @@ try {
   await page.locator(".snav [data-view=assets]").click();
   await page.locator("[data-rentasset=a3]").click();
   assert.equal(await page.locator("[name=billingUnit]").inputValue(), "tháng");
-  assert.equal(await page.locator("[name=unitPrice]").inputValue(), "5500000");
+  assert.equal(
+    await page.locator("[name=unitPrice]").inputValue(),
+    "5.500.000",
+  );
   await page.setViewportSize({ width: 390, height: 844 });
   assert(
     await page
