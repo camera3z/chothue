@@ -270,6 +270,23 @@ try {
     )
   ).rows[0].r;
   assert(automaticContract);
+  // Migration is repeatable and updates both APIs without changing their grants.
+  await db.exec("reset role");
+  const limitsSql = fs.readFileSync("supabase/migrations/20261114_booking_request_limits.sql", "utf8");
+  await db.exec(limitsSql);
+  await db.exec(limitsSql);
+  await db.exec("set role anon");
+  const quotaPhone = "0988888888";
+  for (let i = 1; i <= 10; i++)
+    await send({ phone: quotaPhone, unit: "tháng", periods: i });
+  await assert.rejects(send({ phone: quotaPhone, periods: 11 }), /Vui lòng thử lại sau 15 phút/);
+  await db.exec("reset role");
+  await db.query("update rental_requests set created_at=now()-interval '16 minutes' where phone=$1", [quotaPhone]);
+  await db.exec("set role anon");
+  await send({ phone: quotaPhone, periods: 11 });
+  await db.exec("reset role");
+  const legacyDefinition = (await db.query("select pg_get_functiondef(oid) d from pg_proc where proname='submit_rental_request'")).rows[0].d;
+  assert(legacyDefinition.includes("interval '15 minutes')>=10"));
   console.log(
     "PASS SQL v2: date-inclusive/entered-period estimates, fixed unit conversion, server prices, validation/idempotency/privacy, reviewed address and quote snapshots, negotiated total, unchanged existing profile, repeatable migration",
   );
