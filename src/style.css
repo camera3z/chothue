@@ -1801,4 +1801,4 @@ th {
   min-width: 0;
 }
 .currency-control{position:relative;display:block;min-width:0}.currency-control input{padding-right:36px;font-variant-numeric:tabular-nums;letter-spacing:.025em;text-align:right;font-size:15px;font-weight:500}.currency-suffix{position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px;pointer-events:none}.currency-control:focus-within .currency-suffix{color:var(--accent)}
-.contract-duration{display:block;color:var(--muted);font-size:12px;margin-bottom:9px;line-height:1.6}.contract-formula{display:block;font-size:15px;font-weight:500;font-variant-numeric:tabular-nums;line-height:1.8}.contract-formula>span{color:var(--accent);font-size:17px;font-weight:600}
+.contract-duration{display:block;color:var(--muted);font-size:12px;margin-bottom:9px;line-height:1.6}.contract-formula{display:block;font-family:var(--f-body);font-size:14px;font-weight:400;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.8}.contract-formula>span{font:inherit;color:inherit}
