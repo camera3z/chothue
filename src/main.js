@@ -1,4 +1,5 @@
 import "./style.css";
+import { mountDatePickers } from "./date-picker.js";
 import { readMoneyForm, mountMoneyInputs } from "./money-input.js";
 import { rentalQuote, rentalPeriods } from "./rental-pricing.js";
 import { localInput } from "./booking-request.js";
@@ -900,6 +901,7 @@ function modal(title, body, onSubmit) {
     }
   };
   mountMoneyInputs(el.querySelector("form"));
+  mountDatePickers(el.querySelector("form"));
   const photoInput = el.querySelector("[name=photo]");
   let previewURL;
   photoInput?.addEventListener("change", async () => {
@@ -1028,9 +1030,11 @@ function bindContractPricing() {
         Number(d.unitPrice),
         Number(d.quantity),
       );
-      const days=rentalPeriods(d.start,d.end,'ngày');
-      const compactMoney=n=>new Intl.NumberFormat('vi-VN',{maximumFractionDigits:0}).format(n)+'đ';
-      summary.innerHTML=`<strong class="contract-formula">${q.periods} ${esc(d.billingUnit)} × ${compactMoney(Number(d.unitPrice))}${Number(d.quantity)>1?` × ${Number(d.quantity)} tài sản`:''} = <span>${compactMoney(q.total)}</span></strong>${d.billingUnit!=='ngày'?`<span class="contract-duration">Theo lịch: ${days} ngày · ${esc(dateLabel(d.start))} – ${esc(dateLabel(d.end))}</span>`:''}`;
+      const days = rentalPeriods(d.start, d.end, "ngày");
+      const compactMoney = (n) =>
+        new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 }).format(n) +
+        "đ";
+      summary.innerHTML = `<strong class="contract-formula">${q.periods} ${esc(d.billingUnit)} × ${compactMoney(Number(d.unitPrice))}${Number(d.quantity) > 1 ? ` × ${Number(d.quantity)} tài sản` : ""} = <span>${compactMoney(q.total)}</span></strong>${d.billingUnit !== "ngày" ? `<span class="contract-duration">Theo lịch: ${days} ngày · ${esc(dateLabel(d.start))} – ${esc(dateLabel(d.end))}</span>` : ""}`;
     } catch (e) {
       summary.textContent = e.message;
     }

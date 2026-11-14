@@ -126,3 +126,7 @@ Lưu snapshot `unitPrice`, `billingUnit`, `periods` trên hợp đồng, không 
 ## Hiển thị ô nhập tiền
 
 Các ô tiền trong hộp thoại quản trị (đơn giá, tiền thuê đã thu, cọc, tổng tiền thỏa thuận, thu/hoàn tiền) hiển thị dấu chấm hàng nghìn và ký hiệu ₫ riêng, dùng bàn phím số trên di động. Form chuyển về số nguyên trước khi tính và lưu; không lưu chuỗi có dấu phân cách vào các trường số. Hỗ trợ dán định dạng nhóm nghìn hợp lệ; từ chối số âm, ký hiệu mũ, số thập phân hoặc nhóm phân cách không rõ ràng khi dán. Dữ liệu và giá trị hợp đồng cũ giữ nguyên, không cần SQL. Kiểm tra helper: `node tests/money-input.mjs`.
+
+## Xác nhận ngày trên lịch hợp đồng
+
+Các ô date trong hộp thoại quản trị dùng lịch tùy chỉnh có nút Chọn: bấm ngày chỉ đánh dấu, bấm Chọn mới ghi vào form và cập nhật tiền thuê. Hôm nay/Xóa cũng cần Chọn để xác nhận; đóng hoặc Esc hủy thay đổi đang chọn. Có chọn tháng/năm, bàn phím mũi tên trong lưới, Alt+↓ hoặc F4 tại ô để mở lịch, hỗ trợ sáng/tối và màn hình nhỏ. Các ô datetime-local (đặt thuê theo giờ) vẫn giữ bộ chọn ngày giờ riêng của trình duyệt. Không cần SQL. Kiểm tra: `CHROMIUM_PATH=/usr/bin/chromium node tests/date-picker-ui.mjs` với server demo cổng 5174.
