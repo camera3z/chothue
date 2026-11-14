@@ -1,6 +1,6 @@
 import "./style.css";
 import { readMoneyForm, mountMoneyInputs } from "./money-input.js";
-import { rentalQuote } from "./rental-pricing.js";
+import { rentalQuote, rentalPeriods } from "./rental-pricing.js";
 import { localInput } from "./booking-request.js";
 import { renderStorefront } from "./storefront.js";
 import { createClient } from "@supabase/supabase-js";
@@ -1028,7 +1028,8 @@ function bindContractPricing() {
         Number(d.unitPrice),
         Number(d.quantity),
       );
-      summary.textContent = `${money(Number(d.unitPrice))} / ${d.billingUnit} × ${d.quantity} tài sản × ${q.periods} ${d.billingUnit} = ${money(q.total)}`;
+      const days=rentalPeriods(d.start,d.end,'ngày');
+      summary.innerHTML=`<span class="contract-duration">Thời gian thuê: <b>${days} ngày</b> · ${esc(dateLabel(d.start))} – ${esc(dateLabel(d.end))}</span><strong class="contract-formula">${q.periods} ${esc(d.billingUnit)} × ${money(Number(d.unitPrice))}${Number(d.quantity)>1?` × ${Number(d.quantity)} tài sản`:''} = <span>${money(q.total)}</span></strong>`;
     } catch (e) {
       summary.textContent = e.message;
     }

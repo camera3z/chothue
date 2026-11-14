@@ -27,6 +27,10 @@ try {
   assert.equal(await page.locator("[name=unitPrice]").inputValue(), "100.000");
 
   await page.locator("[name=billingUnit]").selectOption("ngày");
+  await page.locator('[name=end]').fill('2026-11-25');
+  assert((await page.locator('#contract-price-summary').innerText()).includes('12 ngày'));
+  assert((await page.locator('.contract-formula').innerText()).startsWith('12 ngày ×'));
+  await page.locator('[name=end]').fill('2026-11-22');
   await page.locator("[name=quantity]").fill("2");
   assert(
     (await page.locator("#contract-price-summary").innerText()).includes(
