@@ -16,7 +16,7 @@ Khi chưa cấu hình Supabase, dữ liệu mẫu lưu trong localStorage của 
 ## Supabase riêng
 
 1. Tạo dự án Supabase mới, riêng biệt với QRMenu.
-2. Chạy `supabase/schema.sql` một lần trong SQL editor của dự án mới. Sau đó chạy các migration theo thứ tự: `20261112_asset_images.sql`, `20261112_public_storefront.sql`, `20261112_booking_requests.sql` trong `supabase/migrations`. Sau các migration trên, chạy `20261114_fixed_billing.sql` để đồng bộ giá dự kiến 30/365 ngày. Dự án đang dùng chỉ chạy migration mới còn thiếu; không chạy lại schema gốc.
+2. Chạy `supabase/schema.sql` một lần trong SQL editor của dự án mới. Sau đó chạy các migration theo thứ tự: `20261112_asset_images.sql`, `20261112_public_storefront.sql`, `20261112_booking_requests.sql` trong `supabase/migrations`. Sau các migration trên, chạy `20261114_fixed_billing.sql` rồi `20261114_customer_booking_form.sql` để đồng bộ form khách và giá dự kiến. Dự án đang dùng chỉ chạy migration mới còn thiếu; không chạy lại schema gốc.
 3. Sao chép `.env.example` thành `.env.local`, điền URL dự án và publishable/anon key của dự án đó. Không dùng service-role key ở frontend.
 4. Trong Supabase Authentication, cấu hình Site URL và redirect URL theo địa chỉ triển khai, bật Email/Password và cấu hình email xác nhận phù hợp.
 5. Khởi động lại Vite. Đăng ký, xác nhận email và đăng nhập. Workspace được tạo tự động; dữ liệu trống, tách biệt với demo.
@@ -157,3 +157,15 @@ Không tự hợp nhất cọc bảo đảm cũ: deposit/depositRefunded đã c�
 ## Thông tin khách trong hồ sơ cho thuê
 
 Hồ sơ cho thuê hiển thị riêng Họ tên, Số điện thoại, Địa chỉ; không hiển thị email. Ưu tiên thông tin thỏa thuận đã lưu trên hợp đồng (agreedCustomerName/agreedPhone/agreedAddress), nếu chưa có thì lấy hồ sơ khách liên kết qua customerId; thiếu dữ liệu hiện Chưa cung cấp. Khách thuê có nút Sửa thông tin để bổ sung địa chỉ, form tạo/sửa chỉ gồm tên, SĐT, địa chỉ. Các email đã lưu trước đây không bị xóa khỏi dữ liệu, chỉ bỏ khỏi giao diện/tìm kiếm khách. Thông tin này chỉ trong quản trị, không thêm vào projection trang trưng bày công khai. Không cần SQL. Kiểm tra: `CHROMIUM_PATH=/usr/bin/chromium node tests/customer-details-ui.mjs` với server demo cổng 5174.
+
+## Form khách đồng bộ form tạo đơn
+
+Chạy `supabase/migrations/20261114_customer_booking_form.sql` sau các migration đặt thuê hiện có, **trước khi cập nhật frontend**, rồi cập nhật VPS và tải lại các tab. Migration bổ sung địa chỉ, ngày nhập, đơn vị/số kỳ và đơn giá dự kiến cho yêu cầu; tạo API v2, giữ nguyên API và dữ liệu cũ. Không chạy lại schema gốc.
+
+Form khách gồm họ tên, SĐT, địa chỉ (không email), ngày bắt đầu/kết thúc có lịch Chọn, số tài sản, đơn giá chỉ xem, đơn vị ngày/tháng/năm, số tháng/năm nhập riêng khi cần, công thức tiền thuê và ghi chú. Theo ngày tính cả ngày cuối giống hợp đồng thủ công. Theo tháng/năm, lịch không quyết định giá; số kỳ do khách nhập. Không có ô khai đã thanh toán/trả trước vì yêu cầu chưa duyệt và chưa thu tiền.
+
+Khách không tự nhập đơn giá: app và server quy đổi từ giá niêm yết (ngày=1, tháng=30, năm=365; đơn giá giờ/tuần cũ quy đổi về ngày theo 24 giờ/7 ngày), làm tròn đơn giá quy đổi đến đồng. Tài sản theo lượt giữ lựa chọn lượt và số lượt riêng, không giả định đơn giá theo thời gian. Tổng dự kiến server tính lại theo đơn giá hiện tại, không nhận p_price/p_total từ khách. Nếu đơn giá đã đổi khi khách gửi, màn hình xác nhận hiển thị ước tính từ server; shop vẫn chốt thỏa thuận cuối cùng.
+
+API v2 dùng ngày theo lịch Asia/Bangkok: lịch giữ từ 00:00 ngày bắt đầu đến 00:00 ngày sau ngày kết thúc (khoảng nửa mở, cùng ngày vẫn tính một ngày). Quản trị xem/sửa địa chỉ và ngày, thấy đơn vị/số kỳ/đơn giá khách chọn ban đầu, rồi điều chỉnh tổng giá/điều khoản và duyệt như trước. Hợp đồng lưu agreedAddress và snapshot requestedUnit/requestedPeriods/quotedUnitPrice; không ép giá thỏa thuận cuối cùng bằng ước tính. Không ghi đè địa chỉ đã có trong hồ sơ khách cũ; hồ sơ hợp đồng ưu tiên địa chỉ đã thỏa thuận. Yêu cầu cũ có timestamp vẫn dùng API/lịch cũ, không bị chuyển đổi lịch hoặc tiền.
+
+Các quyền, license, kiểm tra tồn, chống trùng, quota, idempotency và liên kết hủy riêng vẫn áp dụng. Anonymous không được đọc địa chỉ/hồ sơ yêu cầu. Kiểm tra migration thật với PostgreSQL local: `node tests/customer-booking-sql.mjs`; kiểm tra UI bằng API giả lập: `CHROMIUM_PATH=/usr/bin/chromium node tests/booking-ui.mjs` (server cổng 5173). Chưa thay thế kiểm tra trên Supabase thật sau triển khai.

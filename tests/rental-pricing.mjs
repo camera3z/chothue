@@ -50,3 +50,16 @@ assert.equal(
 );
 for (const count of [0, -1, NaN, 10001, 1.001])
   assert.throws(() => q("2026-11-14", "2026-11-14", "tháng", 300000, 1, count));
+
+const { listingUnitPrice } = await import("../src/rental-pricing.js");
+assert.equal(
+  listingUnitPrice({ unit: "ngày", price: 100000 }, "tháng"),
+  3000000,
+);
+assert.equal(listingUnitPrice({ unit: "tháng", price: 300000 }, "ngày"), 10000);
+assert.equal(
+  listingUnitPrice({ unit: "tháng", price: 300000 }, "năm"),
+  3650000,
+);
+assert.equal(listingUnitPrice({ unit: "năm", price: 365000 }, "ngày"), 1000);
+assert.throws(() => listingUnitPrice({ unit: "lượt", price: 100000 }, "tháng"));

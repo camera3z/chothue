@@ -45,3 +45,17 @@ export function rentalQuote(start, end, unit, price, quantity, enteredPeriods) {
     throw Error("Tổng tiền vượt giới hạn hoặc đơn giá không phải số nguyên.");
   return { periods, total };
 }
+
+export function listingUnitPrice(asset, target) {
+  const price = Number(asset.price);
+  if (!Number.isFinite(price) || price < 0)
+    throw Error("Đơn giá tài sản không hợp lệ.");
+  if (asset.unit === "lượt" && target === "lượt") return Math.round(price);
+  const days = { giờ: 1 / 24, ngày: 1, tuần: 7, tháng: 30, năm: 365 };
+  if (!days[asset.unit] || !["ngày", "tháng", "năm"].includes(target))
+    throw Error("Tài sản này cần shop xác nhận đơn giá.");
+  const amount = Math.round((price * days[target]) / days[asset.unit]);
+  if (!Number.isSafeInteger(amount) || amount > 100000000000)
+    throw Error("Đơn giá vượt giới hạn, vui lòng liên hệ shop.");
+  return amount;
+}

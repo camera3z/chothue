@@ -41,7 +41,7 @@ try {
           ],
         }),
       });
-    if (u.pathname.endsWith("submit_rental_request")) {
+    if (u.pathname.endsWith("submit_rental_request_v2")) {
       submitted = r.request().postDataJSON();
       return r.fulfill({
         contentType: "application/json",
@@ -71,6 +71,45 @@ try {
   await page.getByRole("button", { name: "Đặt thuê", exact: true }).click();
   await page.locator("[name=name]").fill("Khách thử nghiệm");
   await page.locator("[name=phone]").fill("0901234567");
+  await page.locator("[name=address]").fill("12 Đường A");
+  assert.equal(await page.locator(".date-open").count(), 2);
+  await page.locator("[name=billingUnit]").selectOption("tháng");
+  await page.locator("[name=billingPeriods]").fill("3");
+  assert(
+    (await page.locator(".booking-estimate").innerText()).startsWith(
+      "3 tháng × 3.000.000đ",
+    ),
+  );
+  assert.equal(
+    await page.locator("[name=listedPrice]").evaluate((e) => e.readOnly),
+    true,
+  );
+  const endDate = await page.locator("[name=end]").inputValue();
+  const later = new Date(endDate + "T12:00:00Z");
+  later.setUTCDate(later.getUTCDate() + 2);
+  await page.locator("[name=end]").fill(later.toISOString().slice(0, 10));
+  assert(
+    (await page.locator(".booking-estimate").innerText()).includes(
+      "9.000.000đ",
+    ),
+  );
+  await page.locator("[name=billingUnit]").selectOption("ngày");
+  assert.equal(await page.locator("[name=billingPeriods]").isDisabled(), true);
+  assert(
+    (await page.locator(".booking-estimate").innerText()).startsWith(
+      "3 ngày × 100.000đ",
+    ),
+  );
+  await page.locator("[name=billingUnit]").selectOption("năm");
+  await page.locator("[name=billingPeriods]").fill("2");
+  assert(
+    (await page.locator(".booking-estimate").innerText()).startsWith(
+      "2 năm × 36.500.000đ",
+    ),
+  );
+  await page.locator("[name=billingUnit]").selectOption("tháng");
+  await page.locator("[name=billingPeriods]").fill("3");
+
   await page.locator("[name=consent]").check();
   await page.setViewportSize({ width: 390, height: 844 });
   assert(
@@ -90,7 +129,11 @@ try {
   assert.equal(submitted.p_shop, shop);
   assert.equal(submitted.p_quantity, 1);
   assert.equal(submitted.p_name, "Khách thử nghiệm");
-  assert(new Date(submitted.p_end) > new Date(submitted.p_start));
+  assert(new Date(submitted.p_end_date) >= new Date(submitted.p_start_date));
+  assert.equal(submitted.p_address, "12 Đường A");
+  assert.equal(submitted.p_billing_unit, "tháng");
+  assert.equal(submitted.p_periods, 3);
+  assert(!("p_price" in submitted));
   assert(!("p_total" in submitted));
   const follow = await page
     .getByRole("link", { name: "Theo dõi yêu cầu" })
@@ -140,7 +183,13 @@ try {
     quantity: 1,
     note: "Giao đủ phụ kiện",
     status: "pending",
-    estimated_total: 100000,
+    estimated_total: 9000000,
+    customer_address: "12 Đường A",
+    requested_start_date: start.slice(0, 10),
+    requested_end_date: end.slice(0, 10),
+    billing_unit: "tháng",
+    billing_periods: 3,
+    quoted_unit_price: 3000000,
   };
   let reviewed;
   await admin.route("https://*.supabase.co/**", async (r) => {
@@ -157,7 +206,7 @@ try {
       data = { name: "Shop", enabled: true };
     else if (u.pathname.endsWith("/rental_requests")) data = [req];
     else if (u.pathname.endsWith("/user")) data = user;
-    else if (u.pathname.endsWith("/review_rental_request")) {
+    else if (u.pathname.endsWith("/review_rental_request_v2")) {
       reviewed = r.request().postDataJSON();
       req = { ...req, status: "approved", contract_id: "contract1" };
       doc = {
@@ -175,7 +224,8 @@ try {
             total: reviewed.p_total,
             paid: 0,
             deposit: 0,
-            depositRequired: reviewed.p_deposit,
+            depositRequired: reviewed.p_advance,
+            agreedAddress: reviewed.p_address,
             depositRefunded: 0,
             status: "reserved",
             start: start.slice(0, 10),
@@ -230,6 +280,7 @@ try {
     .locator("#overview-requests")
     .getByRole("button", { name: "Xem xét", exact: true })
     .click();
+  await admin.locator("#modal [name=address]").fill("Địa chỉ đã sửa");
   await admin.locator("#modal [name=total]").fill("350000");
   await admin.locator("#modal [name=deposit]").fill("200000");
   await admin
@@ -240,7 +291,8 @@ try {
     .getByText("Chưa có yêu cầu chờ duyệt", { exact: true })
     .waitFor();
   assert.equal(reviewed.p_total, 350000);
-  assert.equal(reviewed.p_deposit, 200000);
+  assert.equal(reviewed.p_advance, 200000);
+  assert.equal(reviewed.p_address, "Địa chỉ đã sửa");
   await admin.locator(".snav [data-view=contracts]").click();
   await admin
     .getByRole("button", { name: "Giao tài sản", exact: true })

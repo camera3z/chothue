@@ -2019,3 +2019,4 @@ dialog.calendar-picker {
     gap: 8px;
   }
 }
+#public-periods-field[hidden]{display:none!important}
