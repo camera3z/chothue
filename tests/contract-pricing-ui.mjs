@@ -16,6 +16,19 @@ try {
   assert.equal(await page.locator("[name=periods]").count(), 0);
   await page.locator("[name=start]").fill("2026-11-14");
   await page.locator("[name=end]").fill("2026-11-22");
+  await page.locator("[name=end]").fill("2026-12-14");
+  await page.locator("[name=unitPrice]").fill("300000");
+  await page.locator("[name=billingUnit]").selectOption("tháng");
+  assert(
+    (await page.locator(".contract-formula").innerText()).startsWith(
+      "31 ngày × (300.000đ / 30 ngày)",
+    ),
+  );
+  assert(
+    (await page.locator(".contract-formula").innerText()).includes("310.000đ"),
+  );
+  await page.locator("[name=end]").fill("2026-11-22");
+  await page.locator("[name=billingUnit]").selectOption("ngày");
   await page.locator("[name=unitPrice]").fill("100000");
   assert.equal(await page.locator("[name=unitPrice]").inputValue(), "100.000");
   await page.locator("[name=unitPrice]").fill("-100");
@@ -27,10 +40,18 @@ try {
   assert.equal(await page.locator("[name=unitPrice]").inputValue(), "100.000");
 
   await page.locator("[name=billingUnit]").selectOption("ngày");
-  await page.locator('[name=end]').fill('2026-11-25');
-  assert((await page.locator('#contract-price-summary').innerText()).includes('12 ngày × 100.000đ'));
-  assert((await page.locator('.contract-formula').innerText()).startsWith('12 ngày × 100.000đ ='));
-  await page.locator('[name=end]').fill('2026-11-22');
+  await page.locator("[name=end]").fill("2026-11-25");
+  assert(
+    (await page.locator("#contract-price-summary").innerText()).includes(
+      "12 ngày × 100.000đ",
+    ),
+  );
+  assert(
+    (await page.locator(".contract-formula").innerText()).startsWith(
+      "12 ngày × 100.000đ =",
+    ),
+  );
+  await page.locator("[name=end]").fill("2026-11-22");
   await page.locator("[name=quantity]").fill("2");
   assert(
     (await page.locator("#contract-price-summary").innerText()).includes(
@@ -40,7 +61,7 @@ try {
   await page.locator("[name=billingUnit]").selectOption("tháng");
   assert(
     (await page.locator("#contract-price-summary").innerText()).includes(
-      "200.000",
+      "60.000",
     ),
   );
   await page.locator("[name=billingUnit]").selectOption("năm");
@@ -54,8 +75,8 @@ try {
   );
   assert.equal(state.contracts[0].unitPrice, 100000);
   assert.equal(state.contracts[0].billingUnit, "năm");
-  assert.equal(state.contracts[0].periods, 1);
-  assert.equal(state.contracts[0].total, 200000);
+  assert.equal(state.contracts[0].periods, 9 / 365);
+  assert.equal(state.contracts[0].total, 4932);
   assert.equal(state.assets[0].price, 450000);
   await page.locator(".snav [data-view=assets]").click();
   await page.locator("[data-rentasset=a3]").click();

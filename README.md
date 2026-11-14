@@ -16,7 +16,7 @@ Khi chưa cấu hình Supabase, dữ liệu mẫu lưu trong localStorage của 
 ## Supabase riêng
 
 1. Tạo dự án Supabase mới, riêng biệt với QRMenu.
-2. Chạy `supabase/schema.sql` một lần trong SQL editor của dự án mới. Sau đó chạy các migration theo thứ tự: `20261112_asset_images.sql`, `20261112_public_storefront.sql`, `20261112_booking_requests.sql` trong `supabase/migrations`. Dự án đang dùng chỉ chạy migration mới còn thiếu; không chạy lại schema gốc.
+2. Chạy `supabase/schema.sql` một lần trong SQL editor của dự án mới. Sau đó chạy các migration theo thứ tự: `20261112_asset_images.sql`, `20261112_public_storefront.sql`, `20261112_booking_requests.sql` trong `supabase/migrations`. Sau các migration trên, chạy `20261114_fixed_billing.sql` để đồng bộ giá dự kiến 30/365 ngày. Dự án đang dùng chỉ chạy migration mới còn thiếu; không chạy lại schema gốc.
 3. Sao chép `.env.example` thành `.env.local`, điền URL dự án và publishable/anon key của dự án đó. Không dùng service-role key ở frontend.
 4. Trong Supabase Authentication, cấu hình Site URL và redirect URL theo địa chỉ triển khai, bật Email/Password và cấu hình email xác nhận phù hợp.
 5. Khởi động lại Vite. Đăng ký, xác nhận email và đăng nhập. Workspace được tạo tự động; dữ liệu trống, tách biệt với demo.
@@ -104,7 +104,7 @@ Trang khách không còn nút/link quản trị hoặc đăng nhập. Danh mục
 
 **Nâng cấp:** chạy toàn bộ `supabase/migrations/20261112_booking_requests.sql` trong Supabase SQL Editor sau migration trang trưng bày, rồi cập nhật code/build trên VPS và tải lại các tab quản trị. Không chạy lại schema gốc. Migration thêm bảng yêu cầu và `records.version`; thay mọi thao tác ghi records bằng RPC kiểm tra phiên bản và license. Các tab/code cũ dùng upsert trực tiếp sẽ không ghi được sau nâng cấp.
 
-- Trang khách có nút Đặt thuê: tên, SĐT, thời gian bắt đầu/kết thúc, số lượng, ghi chú và đồng ý gửi thông tin cho shop. Giá dự kiến do server tính lại từ đơn giá tài sản; tháng tạm tính 30 ngày, chưa bao gồm cọc/giao nhận/phụ phí.
+- Trang khách có nút Đặt thuê: tên, SĐT, thời gian bắt đầu/kết thúc, số lượng, ghi chú và đồng ý gửi thông tin cho shop. Giá dự kiến do server tính lại từ đơn giá tài sản; tháng cố định 30 ngày, năm cố định 365 ngày và ngày lẻ tính theo ngày sau migration quy ước giá, chưa bao gồm cọc/giao nhận/phụ phí.
 - Yêu cầu chờ duyệt không giữ tồn và không tạo khoản thu. Khách nhận mã và liên kết riêng ở lần gửi thành công đầu tiên (token ở URL fragment; lần gửi lại cùng mã chỉ trả xác nhận, không phát lại token) để xem trạng thái/tự hủy khi còn pending. Sau duyệt phải liên hệ shop; không cho khách tự thay đổi hợp đồng. Không chia sẻ liên kết riêng cho người khác.
 - Quản trị vào Yêu cầu đặt thuê → Làm mới → Xem xét. Có thể sửa tên/SĐT, thời gian, số lượng, tổng tiền thuê, cọc yêu cầu và điều khoản, rồi duyệt hoặc từ chối. Duyệt tạo hợp đồng `reserved` (Đã duyệt · Chờ giao), không tự coi cọc thỏa thuận là tiền đã nhận. Không ghi đè hồ sơ khách cũ khi trùng SĐT; hợp đồng lưu snapshot tên/SĐT thỏa thuận.
 - Đơn thuê → Chỉnh lịch để sửa thỏa thuận trước giao; Giao tài sản để chuyển active; Nhận trả để chuyển returned. Công nợ & tiền cọc có Nhận cọc, Thu tiền, Hoàn cọc riêng.
@@ -119,7 +119,7 @@ Kiểm tra SQL local: `node tests/booking-sql.mjs` dùng migration thật trong 
 
 ## Đơn giá riêng khi tạo hợp đồng thủ công
 
-Form Tạo hợp đồng thay ô Số đơn vị tính tiền bằng Đơn giá thỏa thuận và lựa chọn ngày/tháng/năm. Tự tính số kỳ và tổng tiền = đơn giá nhập × số tài sản × số kỳ, hiển thị ngay trước khi lưu. Tính cả ngày cuối; tháng/năm theo chu kỳ lịch từ ngày bắt đầu, làm tròn kỳ lẻ lên và điều chỉnh ngày cuối tháng (ví dụ 01/01–31/01 là một tháng; 01/01–01/02 là hai kỳ vì tính cả ngày 01/02). Đơn giá mặc định lấy từ tài sản nếu đơn vị phù hợp; với đơn vị giờ/tuần/lượt cũ phải nhập lại giá theo ngày/tháng/năm. Chọn đơn vị mới không tự quy đổi tiền.
+Form Tạo hợp đồng thay ô Số đơn vị tính tiền bằng Đơn giá thỏa thuận và lựa chọn ngày/tháng/năm. Tự tính số kỳ và tổng tiền = đơn giá nhập × số tài sản × số kỳ, hiển thị ngay trước khi lưu. Tính cả ngày cuối; 1 tháng luôn bằng 30 ngày và 1 năm luôn bằng 365 ngày, không thay đổi theo tháng hay năm nhuận. Phần lẻ chia theo ngày, không làm tròn lên cả kỳ; tổng tiền làm tròn đến đồng. Đơn giá mặc định lấy từ tài sản nếu đơn vị phù hợp; với đơn vị giờ/tuần/lượt cũ phải nhập lại giá theo ngày/tháng/năm. Chọn đơn vị mới không tự quy đổi tiền.
 
 Lưu snapshot `unitPrice`, `billingUnit`, `periods` trên hợp đồng, không thay đơn giá tài sản hoặc tổng tiền của hợp đồng cũ. Thay đổi này không sửa giá dự kiến ở form đặt thuê công khai và không thay giới hạn thời lượng ở server. Không cần migration SQL. Kiểm tra công thức: `node tests/rental-pricing.mjs`; kiểm tra form demo: `CHROMIUM_PATH=/usr/bin/chromium node tests/contract-pricing-ui.mjs` (server demo cổng 5174).
 
@@ -130,3 +130,10 @@ Các ô tiền trong hộp thoại quản trị (đơn giá, tiền thuê đã t
 ## Xác nhận ngày trên lịch hợp đồng
 
 Các ô date trong hộp thoại quản trị dùng lịch tùy chỉnh có nút Chọn: bấm ngày chỉ đánh dấu, bấm Chọn mới ghi vào form và cập nhật tiền thuê. Hôm nay/Xóa cũng cần Chọn để xác nhận; đóng hoặc Esc hủy thay đổi đang chọn. Có chọn tháng/năm, bàn phím mũi tên trong lưới, Alt+↓ hoặc F4 tại ô để mở lịch, hỗ trợ sáng/tối và màn hình nhỏ. Các ô datetime-local (đặt thuê theo giờ) vẫn giữ bộ chọn ngày giờ riêng của trình duyệt. Không cần SQL. Kiểm tra: `CHROMIUM_PATH=/usr/bin/chromium node tests/date-picker-ui.mjs` với server demo cổng 5174.
+
+
+## Quy ước cố định 30/365 ngày
+
+Áp dụng cho hợp đồng thủ công mới: tổng = làm tròn(đơn giá × số lượng × số ngày / 30 nếu tháng, / 365 nếu năm). Ngày tính cả ngày cuối như trước; 14/11–14/12 là 31 ngày, đơn giá 300.000đ/tháng thành 310.000đ, không phải 2 tháng. Thuê 30 ngày là đúng một tháng. Năm nhuận vẫn chia 365. Snapshot billingMethod=fixed_days, billingDays và billingBasis lưu quy tắc cho hợp đồng mới; không sửa tổng tiền lịch sử.
+
+Chạy `supabase/migrations/20261114_fixed_billing.sql` để đồng bộ giá dự kiến yêu cầu thuê mới ở backend với frontend. Request dùng timestamp bắt đầu/kết thúc nên tính số ngày bằng làm tròn lên thời lượng 24 giờ (khác hợp đồng chỉ nhập date tính cả ngày cuối), rồi chia 30/365; đơn giá giờ/tuần/lượt giữ cách cũ. Chỉ ước tính mới thay đổi; yêu cầu/hợp đồng đã lưu giữ nguyên, quản trị vẫn chốt tổng giá thỏa thuận.

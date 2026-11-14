@@ -25,6 +25,9 @@ try {
       "utf8",
     ),
   );
+  await db.exec(
+    fs.readFileSync("supabase/migrations/20261114_fixed_billing.sql", "utf8"),
+  );
   await db.query("insert into organizations values ($1)", [shop]);
   await db.query("insert into members values ($1,$2)", [shop, owner]);
   await db.query("insert into licenses values ($1,now()+interval '1 year')", [
@@ -54,11 +57,12 @@ try {
     s = start,
     e = end,
     honey = "",
+    assetId = "a1",
   ) =>
     (
       await db.query(
         "select submit_rental_request($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) result",
-        [shop, id, "a1", "Khách thử", phone, s, e, 1, "Ghi chú", honey],
+        [shop, id, assetId, "Khách thử", phone, s, e, 1, "Ghi chú", honey],
       )
     ).rows[0].result;
   const review = async (id, decision = "approve", s = start, e = end) =>
@@ -103,7 +107,10 @@ try {
   const r1 = request(),
     r2 = request();
   assert.equal((await submit(r1)).id, r1);
-  assert(!('cancel_token' in (await submit(r1))),'Idempotent retry must not reveal cancellation token');
+  assert(
+    !("cancel_token" in (await submit(r1))),
+    "Idempotent retry must not reveal cancellation token",
+  );
   assert.equal((await submit(r1)).id, r1);
   await submit(r2, "0901234568");
   await assert.rejects(
@@ -317,6 +324,78 @@ try {
       ).rows[0].n,
     ),
     1,
+  );
+  await db.exec("reset role");
+  await db.query("update licenses set expires_at=now()+interval '1 year'");
+  await db.query(
+    "update records set data=jsonb_set(data,'{assets}',(data->'assets')||$1::jsonb) where organization_id=$2",
+    [
+      JSON.stringify([
+        {
+          id: "monthly",
+          name: "Monthly",
+          quantity: 1,
+          price: 300000,
+          unit: "tháng",
+        },
+        {
+          id: "yearly",
+          name: "Yearly",
+          quantity: 1,
+          price: 365000,
+          unit: "năm",
+        },
+      ]),
+      shop,
+    ],
+  );
+  const from = Date.now() + 2 * 86400000,
+    until = (days) => new Date(from + days * 86400000).toISOString();
+  await db.exec("set role anon");
+  assert.equal(
+    Number(
+      (
+        await submit(
+          request(),
+          "0909999901",
+          until(0),
+          until(31),
+          "",
+          "monthly",
+        )
+      ).estimated_total,
+    ),
+    310000,
+  );
+  assert.equal(
+    Number(
+      (
+        await submit(
+          request(),
+          "0909999902",
+          until(0),
+          until(365),
+          "",
+          "yearly",
+        )
+      ).estimated_total,
+    ),
+    365000,
+  );
+  assert.equal(
+    Number(
+      (
+        await submit(
+          request(),
+          "0909999903",
+          until(0),
+          until(366),
+          "",
+          "yearly",
+        )
+      ).estimated_total,
+    ),
+    366000,
   );
   console.log(
     "PASS SQL: request validation/idempotency/quotas/privacy, atomic approval conflict, adjacent bookings, duplicate approval rejection, stale-save protection, manual allocation/maintenance validation, handover/return, tenant isolation, expired license, peak overlap",

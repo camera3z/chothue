@@ -39,17 +39,25 @@ export function openBookingRequest(db, shop, asset) {
         ngày: 86400000,
         tuần: 604800000,
         tháng: 2592000000,
+        năm: 31536000000,
         lượt: duration,
       }[asset.unit] || 86400000;
-    const price =
-      Math.ceil(duration / ms) * Number(asset.price) * Number(d.quantity);
+    const periods =
+      asset.unit === "tháng"
+        ? Math.ceil(duration / 86400000) / 30
+        : asset.unit === "năm"
+          ? Math.ceil(duration / 86400000) / 365
+          : Math.ceil(duration / ms);
+    const price = Math.round(
+      periods * Number(asset.price) * Number(d.quantity),
+    );
     estimate.textContent =
       "Tiền thuê dự kiến: " +
       new Intl.NumberFormat("vi-VN", {
         style: "currency",
         currency: "VND",
       }).format(price) +
-      " · Chưa gồm cọc, giao nhận và phụ phí. Giá tháng tạm tính 30 ngày; shop sẽ xác nhận lại.";
+      " · Chưa gồm cọc, giao nhận và phụ phí. Quy ước 1 tháng = 30 ngày, 1 năm = 365 ngày; ngày lẻ tính theo ngày. Shop sẽ xác nhận lại.";
   }
   form.addEventListener("input", calculate);
   calculate();

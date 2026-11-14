@@ -936,7 +936,7 @@ function openForm(type) {
   if (type === "asset")
     modal(
       "Thêm tài sản / sản phẩm",
-      `${input("Tên tài sản", "name")}${input("Danh mục (tự đặt)", "category", "text", 'list="categories"')}<datalist id="categories">${["Phương tiện", "Thiết bị", "Bất động sản", "Thời trang", "Sự kiện", "Công cụ"].map((c) => `<option>${c}</option>`).join("")}</datalist><div class="form-grid">${input("Số lượng", "quantity", "number", 'min="1" step="1"')}${input("Đơn giá (₫)", "price", "number", 'min="0" step="1000"')}</div><label>Đơn vị tính<select name="unit"><option>giờ</option><option selected>ngày</option><option>tuần</option><option>tháng</option><option>lượt</option></select></label>${photoField()}`,
+      `${input("Tên tài sản", "name")}${input("Danh mục (tự đặt)", "category", "text", 'list="categories"')}<datalist id="categories">${["Phương tiện", "Thiết bị", "Bất động sản", "Thời trang", "Sự kiện", "Công cụ"].map((c) => `<option>${c}</option>`).join("")}</datalist><div class="form-grid">${input("Số lượng", "quantity", "number", 'min="1" step="1"')}${input("Đơn giá (₫)", "price", "number", 'min="0" step="1000"')}</div><label>Đơn vị tính<select name="unit"><option>giờ</option><option selected>ngày</option><option>tuần</option><option>tháng</option><option>năm</option><option>lượt</option></select></label>${photoField()}`,
       async (d) => {
         const file = await readImage(d.photo);
         const { photo, ...fields } = d;
@@ -966,7 +966,7 @@ function openForm(type) {
       return toast("Hãy thêm tài sản và khách thuê trước.");
     modal(
       "Tạo hợp đồng",
-      `<label>Khách thuê<select name="customerId">${state.customers.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select></label><label>Tài sản<select name="assetId">${state.assets.map((a) => `<option value="${a.id}" ${available(a) < 1 ? "disabled" : ""}>${esc(a.name)} · Còn ${available(a)}</option>`).join("")}</select></label><div class="form-grid">${input("Ngày bắt đầu", "start", "date", `value="${today()}"`)}${input("Ngày kết thúc", "end", "date", `value="${today()}"`)}</div>${input("Số lượng tài sản", "quantity", "number", 'value="1" min="1" max="10000" step="1"')}<div class="form-grid">${input("Đơn giá thỏa thuận (₫)", "unitPrice", "number", 'value="0" min="0" max="100000000000" step="1"')}<label>Tính theo<select name="billingUnit"><option>ngày</option><option>tháng</option><option>năm</option></select></label></div><div class="summary-box" id="contract-price-summary" role="status"></div><p class="footnote">Tính cả ngày kết thúc. Ngày tính theo số ngày; tháng/năm làm tròn lên theo chu kỳ lịch từ ngày bắt đầu (ngày cuối tháng được điều chỉnh phù hợp). Đơn giá này chỉ áp dụng cho hợp đồng, không thay giá tài sản.</p>${input("Tiền thuê đã thu (₫)", "paid", "number", 'value="0" min="0" step="1000"')}${input("Tiền cọc đã nhận (₫)", "deposit", "number", 'value="0" min="0" step="1000"')}<label>Ghi chú bàn giao<textarea name="handoverNote" placeholder="Phụ kiện đi kèm, tình trạng tài sản, địa chỉ giao…"></textarea></label>`,
+      `<label>Khách thuê<select name="customerId">${state.customers.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select></label><label>Tài sản<select name="assetId">${state.assets.map((a) => `<option value="${a.id}" ${available(a) < 1 ? "disabled" : ""}>${esc(a.name)} · Còn ${available(a)}</option>`).join("")}</select></label><div class="form-grid">${input("Ngày bắt đầu", "start", "date", `value="${today()}"`)}${input("Ngày kết thúc", "end", "date", `value="${today()}"`)}</div>${input("Số lượng tài sản", "quantity", "number", 'value="1" min="1" max="10000" step="1"')}<div class="form-grid">${input("Đơn giá thỏa thuận (₫)", "unitPrice", "number", 'value="0" min="0" max="100000000000" step="1"')}<label>Tính theo<select name="billingUnit"><option>ngày</option><option>tháng</option><option>năm</option></select></label></div><div class="summary-box" id="contract-price-summary" role="status"></div><p class="footnote">Tính cả ngày kết thúc. Quy ước cố định: 1 tháng = 30 ngày, 1 năm = 365 ngày; phần lẻ tính theo ngày, không làm tròn lên cả kỳ. Tổng tiền làm tròn đến đồng. Đơn giá này chỉ áp dụng cho hợp đồng, không thay giá tài sản.</p>${input("Tiền thuê đã thu (₫)", "paid", "number", 'value="0" min="0" step="1000"')}${input("Tiền cọc đã nhận (₫)", "deposit", "number", 'value="0" min="0" step="1000"')}<label>Ghi chú bàn giao<textarea name="handoverNote" placeholder="Phụ kiện đi kèm, tình trạng tài sản, địa chỉ giao…"></textarea></label>`,
       async (d) => {
         if (d.end < d.start)
           throw Error("Ngày kết thúc phải từ ngày bắt đầu trở đi.");
@@ -990,6 +990,10 @@ function openForm(type) {
           quantity: Number(d.quantity),
           unitPrice: Number(d.unitPrice),
           billingUnit: d.billingUnit,
+          billingMethod: "fixed_days",
+          billingDays: rentalPeriods(d.start, d.end, "ngày"),
+          billingBasis:
+            d.billingUnit === "tháng" ? 30 : d.billingUnit === "năm" ? 365 : 1,
           periods,
           total,
           paid: Number(d.paid),
@@ -1034,7 +1038,9 @@ function bindContractPricing() {
       const compactMoney = (n) =>
         new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 }).format(n) +
         "đ";
-      summary.innerHTML = `<strong class="contract-formula">${q.periods} ${esc(d.billingUnit)} × ${compactMoney(Number(d.unitPrice))}${Number(d.quantity) > 1 ? ` × ${Number(d.quantity)} tài sản` : ""} = <span>${compactMoney(q.total)}</span></strong>${d.billingUnit !== "ngày" ? `<span class="contract-duration">Theo lịch: ${days} ngày · ${esc(dateLabel(d.start))} – ${esc(dateLabel(d.end))}</span>` : ""}`;
+      const basis =
+        d.billingUnit === "tháng" ? 30 : d.billingUnit === "năm" ? 365 : 1;
+      summary.innerHTML = `<strong class="contract-formula">${days} ngày × ${basis === 1 ? compactMoney(Number(d.unitPrice)) : `(${compactMoney(Number(d.unitPrice))} / ${basis} ngày)`}${Number(d.quantity) > 1 ? ` × ${Number(d.quantity)} tài sản` : ""} = <span>${compactMoney(q.total)}</span></strong>`;
     } catch (e) {
       summary.textContent = e.message;
     }
@@ -1164,7 +1170,7 @@ function openRefund(id) {
 function openDetail(id) {
   const c = state.contracts.find((x) => x.id === id);
   const el = document.querySelector("#modal");
-  el.innerHTML = `<div class="modal-title"><div><span class="eyebrow">HỒ SƠ CHO THUÊ</span><h2>${esc(c.code)}</h2></div><button id="close" aria-label="Đóng">×</button></div><div class="summary-box"><h3>${esc(assetName(c.assetId))}</h3><p>${esc(c.agreedCustomerName || customerName(c.customerId))} · ${c.quantity} đơn vị</p><p>Giao ${dateLabel(c.start)} → Hẹn trả ${dateLabel(c.end)}</p></div><div class="detail-money"><div>Tiền thuê<strong>${money(c.total)}</strong></div><div>Đã thu<strong>${money(c.paid)}</strong></div><div>Cọc đang giữ<strong>${money(held(c))}</strong></div></div><p class="footnote">${c.rentalStart ? `Thời gian: ${esc(new Date(c.rentalStart).toLocaleString("vi-VN"))} → ${esc(new Date(c.rentalEnd).toLocaleString("vi-VN"))}` : ""} · Cọc thỏa thuận ${money(c.depositRequired || 0)}</p><p class="footnote">${c.billingUnit ? `Đơn giá hợp đồng: ${money(c.unitPrice)} / ${esc(c.billingUnit)} · ${c.periods} ${esc(c.billingUnit)}` : ""}</p><h3>Ghi chú bàn giao</h3><p class="note-text">${esc(c.handoverNote || "Chưa có ghi chú")}</p><h3>Ghi chú nhận trả</h3><p class="note-text">${esc(c.returnNote || "Chưa nhận trả")}</p><h3>Lịch sử thu · hoàn tiền</h3>${
+  el.innerHTML = `<div class="modal-title"><div><span class="eyebrow">HỒ SƠ CHO THUÊ</span><h2>${esc(c.code)}</h2></div><button id="close" aria-label="Đóng">×</button></div><div class="summary-box"><h3>${esc(assetName(c.assetId))}</h3><p>${esc(c.agreedCustomerName || customerName(c.customerId))} · ${c.quantity} đơn vị</p><p>Giao ${dateLabel(c.start)} → Hẹn trả ${dateLabel(c.end)}</p></div><div class="detail-money"><div>Tiền thuê<strong>${money(c.total)}</strong></div><div>Đã thu<strong>${money(c.paid)}</strong></div><div>Cọc đang giữ<strong>${money(held(c))}</strong></div></div><p class="footnote">${c.rentalStart ? `Thời gian: ${esc(new Date(c.rentalStart).toLocaleString("vi-VN"))} → ${esc(new Date(c.rentalEnd).toLocaleString("vi-VN"))}` : ""} · Cọc thỏa thuận ${money(c.depositRequired || 0)}</p><p class="footnote">${c.billingUnit ? `Đơn giá hợp đồng: ${money(c.unitPrice)} / ${esc(c.billingUnit)} · ${c.billingMethod === "fixed_days" ? `${c.billingDays} ngày / ${c.billingBasis} ngày mỗi kỳ` : `${c.periods} ${esc(c.billingUnit)}`} ` : ""}</p><h3>Ghi chú bàn giao</h3><p class="note-text">${esc(c.handoverNote || "Chưa có ghi chú")}</p><h3>Ghi chú nhận trả</h3><p class="note-text">${esc(c.returnNote || "Chưa nhận trả")}</p><h3>Lịch sử thu · hoàn tiền</h3>${
     (c.transactions || []).length
       ? table(
           ["Ngày", "Loại", "Số tiền"],

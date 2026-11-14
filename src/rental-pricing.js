@@ -13,34 +13,13 @@ export function rentalPeriods(start, end, unit) {
   if (b < a) throw Error("Ngày kết thúc phải từ ngày bắt đầu trở đi.");
   if (!["ngày", "tháng", "năm"].includes(unit))
     throw Error("Chọn tính theo ngày, tháng hoặc năm.");
-  if (unit === "ngày") return (b - a) / 86400000 + 1;
-  const addMonths = (months) => {
-    const month = a.getUTCMonth() + months;
-    const first = new Date(Date.UTC(a.getUTCFullYear(), month, 1));
-    const last = new Date(
-      Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0),
-    ).getUTCDate();
-    return new Date(
-      Date.UTC(
-        first.getUTCFullYear(),
-        first.getUTCMonth(),
-        Math.min(a.getUTCDate(), last),
-      ),
-    );
-  };
-  const span =
-    (b.getUTCFullYear() - a.getUTCFullYear()) * 12 +
-    b.getUTCMonth() -
-    a.getUTCMonth();
-  const step = unit === "năm" ? 12 : 1;
-  let count = Math.max(1, Math.floor(span / step));
-  while (addMonths(count * step) <= b) count++;
-  return count;
+  const days = (b - a) / 86400000 + 1;
+  return days / (unit === "tháng" ? 30 : unit === "năm" ? 365 : 1);
 }
 export function rentalQuote(start, end, unit, price, quantity) {
   const periods = rentalPeriods(start, end, unit);
   if (
-    !Number.isFinite(price) ||
+    !Number.isSafeInteger(price) ||
     price < 0 ||
     price > 100000000000 ||
     !Number.isInteger(quantity) ||
@@ -48,7 +27,7 @@ export function rentalQuote(start, end, unit, price, quantity) {
     quantity > 10000
   )
     throw Error("Đơn giá hoặc số lượng không hợp lệ.");
-  const total = price * quantity * periods;
+  const total = Math.round(price * quantity * periods);
   if (!Number.isSafeInteger(total))
     throw Error("Tổng tiền vượt giới hạn hoặc đơn giá không phải số nguyên.");
   return { periods, total };
