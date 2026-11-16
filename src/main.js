@@ -5,6 +5,7 @@ import { rentalQuote, rentalPeriods } from "./rental-pricing.js";
 import { localInput } from "./booking-request.js";
 import { renderStorefront } from "./storefront.js";
 import { createClient } from "@supabase/supabase-js";
+const filezunoSSO = import.meta.env.VITE_FILEZUNO_SSO === "1";
 const configured = Boolean(
   import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY,
 );
@@ -12,6 +13,7 @@ const db = configured
   ? createClient(
       import.meta.env.VITE_SUPABASE_URL,
       import.meta.env.VITE_SUPABASE_ANON_KEY,
+      filezunoSSO ? { auth: { flowType: "pkce" } } : {},
     )
   : null;
 const money = (n) =>
@@ -1234,10 +1236,24 @@ function openDetail(id) {
 }
 function renderAuth() {
   document.querySelector("#app").innerHTML =
-    `<div class="auth-page-header"><a class="brand" href="#"><i></i>Rentbook</a>${accountHeader()}</div><div class="auth"><div class="auth-story"><div class="brand"><i></i>Rentbook</div><span class="eyebrow">HỆ ĐIỀU HÀNH CHO THUÊ ĐA NGÀNH</span><h2>Tài sản luôn luân chuyển.<br>Vận hành luôn trong tầm tay.</h2><p>Từ lần bàn giao đầu tiên đến lần nhận trả cuối cùng.</p><div class="auth-flow"><span>01 / QUẢN LÝ KHO</span><span>02 / GIAO & NHẬN TRẢ</span><span>03 / TIỀN THUÊ & TIỀN CỌC</span></div></div><section class="panel"><span class="eyebrow">KHÔNG GIAN KINH DOANH CỦA BẠN</span><h1>Đăng nhập bàn điều hành.</h1><p>Không gian riêng cho đơn vị kinh doanh cho thuê của bạn.</p><form id="auth-form">${input("Email", "email", "email")}${input("Mật khẩu", "password", "password", 'minlength="8"')}<p id="auth-message" role="status"></p><button class="primary" name="action" value="signin">Đăng nhập</button><button name="action" value="signup">Tạo tài khoản</button></form></section></div>`;
+    `<div class="auth-page-header"><a class="brand" href="#"><i></i>Rentbook</a>${accountHeader()}</div><div class="auth"><div class="auth-story"><div class="brand"><i></i>Rentbook</div><span class="eyebrow">HỆ ĐIỀU HÀNH CHO THUÊ ĐA NGÀNH</span><h2>Tài sản luôn luân chuyển.<br>Vận hành luôn trong tầm tay.</h2><p>Từ lần bàn giao đầu tiên đến lần nhận trả cuối cùng.</p><div class="auth-flow"><span>01 / QUẢN LÝ KHO</span><span>02 / GIAO & NHẬN TRẢ</span><span>03 / TIỀN THUÊ & TIỀN CỌC</span></div></div><section class="panel"><span class="eyebrow">KHÔNG GIAN KINH DOANH CỦA BẠN</span><h1>Đăng nhập bàn điều hành.</h1><p>Không gian riêng cho đơn vị kinh doanh cho thuê của bạn.</p>${filezunoSSO ? '<button type="button" class="primary" id="filezunoSignIn">Đăng nhập bằng Filezuno</button><p>Dùng tài khoản Filezuno để truy cập Rentbook.</p><p id="filezunoSignInStatus" role="status"></p>' : ""}<form id="auth-form">${input("Email", "email", "email")}${input("Mật khẩu", "password", "password", 'minlength="8"')}<p id="auth-message" role="status"></p><button class="primary" name="action" value="signin">Đăng nhập</button><button name="action" value="signup">Tạo tài khoản</button></form></section></div>`;
   document.querySelector("[data-login]")?.addEventListener("click", (e) => {
     e.preventDefault();
     document.querySelector("#auth-form [name=email]").focus();
+  });
+  document.querySelector("#filezunoSignIn")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      const { error } = await db.auth.signInWithOAuth({
+        provider: "custom:filezuno",
+        options: { scopes: "email profile", redirectTo: location.origin + "/" },
+      });
+      if (error) throw error;
+    } catch (error) {
+      document.querySelector("#filezunoSignInStatus").textContent = "Chưa thể kết nối Filezuno: " + error.message;
+      button.disabled = false;
+    }
   });
   document.querySelector("form").onsubmit = async (e) => {
     e.preventDefault();

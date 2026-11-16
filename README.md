@@ -175,3 +175,10 @@ Các quyền, license, kiểm tra tồn, chống trùng, quota, idempotency và 
 Chạy `supabase/migrations/20261114_auto_booking_end.sql` sau migration form khách, rồi cập nhật frontend. Trên form khách, đơn vị tháng/năm ẩn ô Ngày kết thúc; bắt đầu và số kỳ quyết định ngày trả dự kiến: start + ceil(số kỳ × 30 hoặc 365) − 1 ngày (tính cả ngày đầu). Ví dụ 14/11 + 1 tháng → 13/12. Hiển thị ngày trả ở dòng ghi chú và xác nhận, không phải một ô lịch cần nhập. Khi quay về đơn vị ngày, ô kết thúc hiện lại và khôi phục ngày đã nhập thủ công trước đó; theo lượt vẫn nhập kết thúc riêng.
 
 Client và server đều tự tính; server bỏ qua ngày kết thúc gửi lên nếu tính theo tháng/năm, nên sửa hidden input không làm giảm khoảng giữ chỗ. Không sửa yêu cầu/hợp đồng đã lưu trước nâng cấp. Ngày lẻ do số kỳ thập phân được làm tròn lên để giữ đủ ngày, giá vẫn theo số kỳ nhập. Giới hạn tháng/năm mới là 3.650 ngày (10 năm quy ước), số kỳ tối đa 121,66 tháng hoặc 10 năm; đặt thuê theo ngày của khách vẫn tối đa 366 ngày. Hàm kiểm tra tồn dùng chung mở rộng tới 10 năm để quản trị có thể duyệt/giao/chỉnh các lịch dài này; quyền, quota, kiểm tra trùng và version vẫn giữ nguyên. Lịch kết thúc trong tạo đơn thủ công/quản trị vẫn được chỉnh riêng theo thỏa thuận.
+
+## Đăng nhập bằng Filezuno
+
+Hỗ trợ provider `custom:filezuno` qua Supabase Auth; giữ tài khoản, dữ liệu và
+license hiện có. Bật bằng `VITE_FILEZUNO_SSO=1` chỉ sau khi cấu hình provider.
+Xem [hướng dẫn cấu hình](deploy/FILEZUNO-SSO.md). Không có client secret ở frontend.
+Kiểm thử mock: `CHROMIUM_PATH=/usr/bin/chromium node tests/filezuno-sso.mjs`.
