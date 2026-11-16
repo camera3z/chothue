@@ -30,3 +30,29 @@ Phiên Supabase có vòng đời riêng, chưa có đăng xuất toàn hệ th�
 Rollback UI: bỏ `VITE_FILEZUNO_SSO`, build và phát hành lại bản trước. Không xóa
 các identity hoặc dữ liệu của khách để rollback. Kiểm tra thật với hai tài khoản
 và hai shop sau khi provider được bật; build/test mock không thay thế bước đó.
+
+## Phát hành tự động từ checkout staging
+
+Khi mã nguồn/cấu hình cũ ở `/opt/chothue`, có thể chạy từ checkout mới:
+
+```sh
+python3 deploy/deploy-sso.py --source /opt/chothue
+```
+
+Công cụ yêu cầu root, Node.js 22+, npm, Nginx và curl. Nó dùng public config hiện
+có, tự tìm Node trong PATH hoặc NVM, build riêng với SSO bật, xác định đúng root
+của `thue.filezuno.net` bằng cấu hình Nginx và kiểm tra HTTPS nội bộ với chứng chỉ
+hợp lệ trước khi ghi. Không đổi cấu hình Nginx, các website khác hoặc Supabase.
+Nếu root dùng chung với hostname khác, không rõ ràng hoặc có symlink bên trong,
+công cụ dừng trước khi phát hành.
+
+Bản giao diện cũ được sao lưu trong `/root/rentbook-sso-release-*/previous-web`.
+Assets được ghi trước, `index.html` sau cùng; asset hash cũ được giữ để các tab
+đang mở vẫn tải được. Nếu kiểm tra tệp mới qua Nginx không đạt, khôi phục tệp cũ.
+Thông báo thành công chưa xác nhận người dùng đã đăng nhập SSO thật; cần bấm nút,
+đồng ý kết nối và kiểm tra shop/license sau khi quay về Rentbook.
+
+Source `/opt/chothue` và `.env.local` cũ được giữ nguyên. Những lần cập nhật sau
+cần tiếp tục dùng helper hoặc bảo đảm `VITE_FILEZUNO_SSO=1` trong môi trường build.
+Không cần restart Nginx cho cập nhật tệp tĩnh này. Kiểm thử helper:
+`python3 tests/deploy-sso.py`.
