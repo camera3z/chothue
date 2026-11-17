@@ -54,5 +54,23 @@ try{
  await db.exec('set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[other]);
  await db.query('select redeem_license($1,$2)',[shop2,legacy]);await db.exec('reset role');
  assert((await db.query("select expires_at between now()+interval '7 days'-interval '5 seconds' and now()+interval '7 days'+interval '5 seconds' ok from licenses where organization_id=$1",[shop2])).rows[0].ok);
- console.log('PASS actual PostgreSQL migration: service-only issuance, idempotence, immutable binding, private RLS/grants, buyer/shop isolation, single-use, calendar-month renewal, legacy keys');
+ let leapYear=new Date().getUTCFullYear()+4;
+ while(leapYear%4!==0 || (leapYear%100===0 && leapYear%400!==0))leapYear++;
+ const durations=[
+  [3,`${leapYear}-01-31T12:00:00Z`,`${leapYear}-04-30T12:00:00Z`],
+  [6,`${leapYear}-08-31T12:00:00Z`,`${leapYear+1}-02-28T12:00:00Z`],
+  [12,`${leapYear}-02-29T12:00:00Z`,`${leapYear+1}-02-28T12:00:00Z`],
+ ];
+ for(const [months,start,expected] of durations){
+  const raw='FZ-duration-'+months+'-'+'q'.repeat(64),ref='filezuno:'+String(123456789012350+months);
+  await db.query('insert into extensions.test_hashes values($1,decode($2,\'hex\'))',[raw,hash(raw)]);
+  await db.exec('set role service_role');assert.equal((await issue(ref,raw,sub,months)).months,months);await db.exec('reset role');
+  await db.query('update licenses set expires_at=$1::timestamptz where organization_id=$2',[start,shop]);
+  await db.exec('set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[user]);
+  await db.query('select redeem_license($1,$2)',[shop,raw]);
+  await assert.rejects(()=>db.query('select redeem_license($1,$2)',[shop,raw]));
+  await db.exec('reset role');
+  assert((await db.query('select expires_at=$1::timestamptz ok from licenses where organization_id=$2',[expected,shop])).rows[0].ok,months+' calendar months incl month-end/leap-day');
+ }
+ console.log('PASS actual PostgreSQL migration: service-only issuance, idempotence, immutable binding, private RLS/grants, buyer/shop isolation, single-use, 1/3/6/12-calendar-month renewal with month-end/leap-day clamping, legacy keys');
 }finally{await db.close();}
