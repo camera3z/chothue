@@ -56,3 +56,14 @@ Source `/opt/chothue` và `.env.local` cũ được giữ nguyên. Những lần
 cần tiếp tục dùng helper hoặc bảo đảm `VITE_FILEZUNO_SSO=1` trong môi trường build.
 Không cần restart Nginx cho cập nhật tệp tĩnh này. Kiểm thử helper:
 `python3 tests/deploy-sso.py`.
+
+## Key mua trên Filezuno
+
+Trước khi bán, chạy migration `20261117053547_filezuno_paid_keys.sql` một lần
+trong dự án Rentbook. Không chạy lại schema.sql. Migration giữ key cũ theo số
+ngày, hỗ trợ key mới ràng buộc đúng mã tài khoản Filezuno, thời hạn theo tháng
+lịch và cấp key idempotent theo mã đơn. Admin backend Filezuno mới được gọi RPC
+cấp key; browser/anon/authenticated không có quyền. Key mới được nhập ở Gói và
+bản quyền sau khi đăng nhập bằng Filezuno; không tự cấp license chỉ vì SSO.
+Nút Mua key/Gia hạn dẫn về https://filezuno.net/buy/rentbook.
+Kiểm tra SQL thực: `node tests/filezuno-licenses-sql.mjs`.
