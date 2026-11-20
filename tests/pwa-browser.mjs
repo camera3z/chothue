@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve, extname } from 'node:path';
 import { chromium } from 'playwright';
@@ -45,6 +45,10 @@ try {
     args: ['--no-sandbox'], viewport: { width: 1440, height: 1000 },
   });
   browser = context.browser();
+  // Reproduce browsers that meet PWA requirements but do not offer a prompt.
+  await context.addInitScript(() => window.addEventListener('beforeinstallprompt', event => {
+    if (event.isTrusted) { event.preventDefault(); event.stopImmediatePropagation(); }
+  }, true));
   await context.addInitScript(({ token, user }) => {
     if (!localStorage.getItem('pwa-fixture-initialized')) {
       localStorage.setItem('pwa-fixture-initialized', '1');
@@ -82,17 +86,49 @@ try {
   assert.equal(await page.evaluate(async () => (await navigator.serviceWorker.getRegistration()).updateViaCache), 'none');
   console.log('PASS PWA: production manifest, icons and service worker pass Chromium installability checks');
 
+  const installEntry = page.locator('.side-bottom [data-pwa-install]');
+  await installEntry.waitFor({ state: 'visible' });
+  assert.equal(await installEntry.textContent(), 'Cài Rentbook trên PC');
+  assert.equal(await page.locator('[data-pwa-install]:visible').count(), 1);
+  if (process.env.PWA_TEST_ARTIFACTS) {
+    await mkdir(process.env.PWA_TEST_ARTIFACTS, { recursive: true });
+    await page.screenshot({ path: join(process.env.PWA_TEST_ARTIFACTS, 'rentbook-install-button.png'), fullPage: true });
+  }
+  await installEntry.click();
+  const guide = page.getByRole('dialog', { name: 'Cài Rentbook trên PC' });
+  await guide.waitFor();
+  assert.equal(await page.locator('[data-pwa-install-now]').isHidden(), true);
+  await guide.getByRole('heading', { name: 'Google Chrome' }).waitFor();
+  await guide.getByRole('heading', { name: 'Microsoft Edge' }).waitFor();
+  if (process.env.PWA_TEST_ARTIFACTS) await page.screenshot({ path: join(process.env.PWA_TEST_ARTIFACTS, 'rentbook-install-guide.png'), fullPage: true });
+  await page.setViewportSize({ width: 375, height: 812 });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  console.log('PASS missing-prompt regression: install entry stays visible; accessible Chrome/Edge guide opens without a native prompt');
+
   // Test the install-button interaction without installing into the host OS.
   await page.exposeFunction('fixtureInstallPrompt', () => installPrompts++);
+  await page.evaluate(() => {
+    const event = new Event('beforeinstallprompt', { cancelable: true });
+    event.prompt = async () => { await window.fixtureInstallPrompt(); };
+    event.userChoice = Promise.resolve({ outcome: 'dismissed', platform: 'web' });
+    window.dispatchEvent(event);
+  });
+  await page.locator('[data-pwa-install-now]').click();
+  await page.locator('[data-pwa-install-now]').waitFor({ state: 'hidden' });
+  assert.equal(installPrompts, 1); assert.equal(await guide.isVisible(), true);
+  await guide.getByRole('button', { name: 'Đã hiểu', exact: true }).click();
+  await installEntry.click(); await guide.waitFor();
+  await page.keyboard.press('Escape');
   await page.evaluate(() => {
     const event = new Event('beforeinstallprompt', { cancelable: true });
     event.prompt = async () => { await window.fixtureInstallPrompt(); };
     event.userChoice = Promise.resolve({ outcome: 'accepted', platform: 'web' });
     window.dispatchEvent(event);
   });
-  await page.locator('[data-pwa-install]').click(); assert.equal(installPrompts, 1);
+  await installEntry.click(); assert.equal(installPrompts, 2);
   await page.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
-  assert.equal(await page.locator('[data-pwa-install]').isHidden(), true);
+  assert.equal(await page.locator('[data-pwa-install]:visible').count(), 0);
   await page.getByText('Đã cài Rentbook. Bạn có thể mở ứng dụng từ menu Start.').waitFor();
   assert.equal(await page.evaluate(async () => (await caches.keys()).length), 0);
   console.log('PASS install controls: offered prompt is used once; installed state hides button; no app data cache');

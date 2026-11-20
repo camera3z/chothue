@@ -1,8 +1,21 @@
-[data-pwa-install][hidden],[data-pwa-update][hidden],#rentbook-pwa-notice[hidden]{display:none!important}
+[data-pwa-install][hidden],[data-pwa-install-now][hidden],[data-pwa-update][hidden],#rentbook-pwa-notice[hidden]{display:none!important}
 .account-header{flex-wrap:wrap;row-gap:8px}
 .account-header .pwa-install{color:var(--accent);border-color:var(--accent);background:var(--surface);white-space:nowrap}
 .account-header .pwa-update{color:var(--warn);background:var(--warn-soft);white-space:nowrap}
+.side-bottom>.pwa-install{width:100%;min-height:40px;justify-content:center;text-align:center;font-weight:600;background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.pwa-install-help{width:min(520px,calc(100vw - 32px));max-height:calc(100svh - 48px);overflow:auto;padding:26px;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink)}
+.pwa-install-help::backdrop{background:#07181f70}
+.pwa-help-header{display:flex;justify-content:space-between;align-items:center;gap:16px}
+.pwa-help-header>[data-pwa-help-close]{font-size:22px;width:34px;min-height:34px;padding:0}
+.pwa-install-help h2{font-size:24px;line-height:1.5;margin:24px 0 12px}
+.pwa-install-help p{line-height:1.8;color:var(--muted)}
+.pwa-browser-help{padding:4px 18px;margin:18px 0;border:1px solid var(--line);border-radius:10px;background:var(--raise)}
+.pwa-browser-help h3{font-size:14px;margin:16px 0 6px}
+.pwa-browser-help p{font-size:13px;margin:0 0 16px}
+.pwa-help-note{font-size:12px}
+.pwa-help-footer{display:flex;justify-content:flex-end;margin-top:20px}
+@media(min-width:880px){.shell .account-header [data-pwa-install]{display:none!important}}
 #rentbook-pwa-notice{position:fixed;z-index:150;bottom:20px;left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100vw - 32px);padding:12px 18px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);box-shadow:var(--shadow);font-size:13px;line-height:1.7}
 #rentbook-pwa-notice[data-kind=offline]{border-color:var(--warn);background:var(--warn-soft);color:var(--warn)}
 @media(max-width:680px){#rentbook-pwa-notice{bottom:84px}.account-header .pwa-install,.account-header .pwa-update{font-size:11px;padding:5px 8px}}
-@media print{[data-pwa-install],[data-pwa-update],#rentbook-pwa-notice{display:none!important}}
+@media print{[data-pwa-install],[data-pwa-update],#rentbook-pwa-notice,.pwa-install-help{display:none!important}}

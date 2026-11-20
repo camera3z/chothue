@@ -5,11 +5,11 @@ Website: **https://thue.filezuno.net**. PWA cài từ Chrome/Edge, có biểu t�
 ## Cài trên Windows
 
 1. Mở `https://thue.filezuno.net` trong Chrome hoặc Microsoft Edge cập nhật, ở cửa sổ thường.
-2. Khi trình duyệt cho phép cài, chọn **Cài Rentbook** ở đầu trang. Cũng có thể chọn biểu tượng cài ứng dụng trên thanh địa chỉ hoặc mục cài ứng dụng trong menu trình duyệt.
+2. Chọn **Cài Rentbook trên PC** ở thanh bên trái, ngay trên nhóm đổi giao diện/đăng xuất. Ở màn hình đăng nhập hoặc màn hình nhỏ, nút **Cài Rentbook** nằm ở đầu trang. Nếu Chrome/Edge đã cung cấp lời mời cài thì mở hộp cài ngay; nếu chưa, ứng dụng hiện hướng dẫn cài từ menu trình duyệt.
 3. Xác nhận trong cửa sổ cài của trình duyệt. Mở Rentbook từ menu Start; có thể thêm lối tắt desktop/thanh tác vụ theo lựa chọn của trình duyệt.
 4. Đăng nhập Filezuno hoặc email như trên web, kiểm tra đúng đơn vị và hạn bản quyền.
 
-Trang công khai `?shop=...` dành cho khách đặt thuê không hiện nút cài ứng dụng quản trị. Nút cài không hiện khi chạy trong cửa sổ PWA hoặc khi trình duyệt chưa cung cấp lời mời cài.
+Trang công khai `?shop=...` dành cho khách đặt thuê không hiện nút cài ứng dụng quản trị. Nút cài tự ẩn trong cửa sổ PWA. Trong trình duyệt thường, nút luôn hiện dù chưa có `beforeinstallprompt`; việc người dùng đóng hộp cài không làm mất đường dẫn tới hướng dẫn.
 
 ## Kết nối, dữ liệu và cập nhật
 
