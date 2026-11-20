@@ -11,12 +11,15 @@ from html.parser import HTMLParser
 import json
 import os
 from pathlib import Path
+import platform
+import struct
 import re
 import shlex
 import shutil
 import subprocess
 import sys
 import tempfile
+from urllib.request import urlopen
 
 DOMAIN = 'thue.filezuno.net'
 PROJECT = 'lkwnbvervvgbbvfosohi'
@@ -114,37 +117,118 @@ def build_settings(path):
     return values
 
 
-def find_node(source):
+def node_runtime(node):
+    """Check both executables under the PATH used for this build."""
+    try:
+        version = subprocess.check_output([str(node), '--version'], text=True, stderr=subprocess.PIPE, timeout=10).strip()
+        match = re.fullmatch(r'v(\d+)\.(\d+)\.(\d+)', version)
+        if not match or tuple(map(int, match.groups())) < (22, 9, 0):
+            return None
+        env = {**os.environ, 'PATH': str(node.parent) + os.pathsep + os.environ.get('PATH', '')}
+        npm = shutil.which('npm', path=env['PATH'])
+        if not npm:
+            return None
+        subprocess.check_output([npm, '--version'], text=True, stderr=subprocess.PIPE, env=env, timeout=10)
+        return env, npm
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def download_node(cache):
+    """Install an official, checksum-verified Node 24 build under root's cache."""
+    arch = {'x86_64': 'x64', 'amd64': 'x64', 'aarch64': 'arm64', 'arm64': 'arm64'}.get(platform.machine().lower())
+    if not arch or platform.system() != 'Linux':
+        raise DeployError('Cần Linux x64/arm64 để tải Node riêng cho build.')
+    base = 'https://nodejs.org/dist/latest-v24.x/'
+    with urlopen(base + 'SHASUMS256.txt', timeout=30) as response:
+        manifest = response.read(1024 * 1024).decode('ascii')
+    files = []
+    for line in manifest.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and re.fullmatch(r'[a-f0-9]{64}', parts[0]) and re.fullmatch(r'node-v24\.\d+\.\d+-linux-' + arch + r'\.tar\.xz', parts[1]):
+            files.append(parts)
+    if len(files) != 1:
+        raise DeployError('Chưa xác minh được bản Node 24 chính thức; chưa phát hành website.')
+    expected, filename = files[0]
+    version = re.fullmatch(r'node-(v24\.\d+\.\d+)-linux-' + arch + r'\.tar\.xz', filename).group(1)
+    cache.mkdir(parents=True, exist_ok=True, mode=0o700)
+    target = cache / filename.removesuffix('.tar.xz')
+    if not target.exists():
+        with tempfile.TemporaryDirectory(prefix='.download-', dir=cache) as directory:
+            stage = Path(directory)
+            archive = stage / filename
+            digest, size = hashlib.sha256(), 0
+            print('Đang tải Node 24 riêng cho build và kiểm tra SHA-256...', flush=True)
+            with urlopen('https://nodejs.org/dist/' + version + '/' + filename, timeout=30) as response, archive.open('wb') as output:
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    size += len(chunk)
+                    if size > 100 * 1024 * 1024:
+                        raise DeployError('Tệp Node vượt giới hạn tải; chưa phát hành website.')
+                    digest.update(chunk)
+                    output.write(chunk)
+            if digest.hexdigest() != expected:
+                raise DeployError('SHA-256 của Node không khớp; dừng trước khi giải nén hoặc chạy.')
+            subprocess.run(['tar', '-xJf', str(archive), '-C', str(stage), '--no-same-owner', '--no-same-permissions'], check=True)
+            extracted = stage / target.name
+            if not node_runtime(extracted / 'bin/node'):
+                raise DeployError('Bản Node tải về chưa chạy được cùng npm; chưa phát hành website.')
+            if not target.exists():
+                extracted.rename(target)
+    return target / 'bin/node'
+
+
+def find_node(source, install_if_missing=False):
     candidates = []
     if shutil.which('node'):
         candidates.append(Path(shutil.which('node')))
-    for base in (source / '.nvm', Path('/root/.nvm')):
+    bases = [source / '.nvm', source.parent / 'chothue/.nvm', Path('/root/.nvm')]
+    if os.environ.get('NVM_DIR'):
+        bases.append(Path(os.environ['NVM_DIR']))
+    try:
+        bases.extend(sorted(source.parent.glob('*/.nvm')))
+    except OSError:
+        pass
+    for base in bases:
         try:
-            candidates.extend(sorted(base.glob('versions/node/*/bin/node'), reverse=True))
+            candidates.extend(sorted(base.glob('versions/node/*/bin/node'), key=lambda p: tuple(map(int, re.findall(r'\d+', p.parent.parent.name))), reverse=True))
         except OSError:
             continue
+    cache = Path('/root/.cache/filezuno-node')
+    try:
+        candidates.extend(sorted(cache.glob('node-v*/bin/node'), reverse=True))
+    except OSError:
+        pass
+    seen = set()
     for node in candidates:
-        try:
-            version = subprocess.check_output([str(node), '--version'], text=True).strip()
-            if int(version.lstrip('v').split('.')[0]) < 22:
-                continue
-            env = {**os.environ, 'PATH': str(node.parent) + os.pathsep + os.environ.get('PATH', '')}
-            npm = shutil.which('npm', path=env['PATH'])
-            if npm:
-                return env, npm
-        except (OSError, ValueError, subprocess.CalledProcessError):
+        if node in seen:
             continue
-    raise DeployError('Chưa tìm thấy Node.js 22+ và npm, kể cả trong /opt/chothue/.nvm. Chưa thay đổi website.')
+        seen.add(node)
+        runtime = node_runtime(node)
+        if runtime:
+            print('Dùng Node để build:', node, flush=True)
+            return runtime
+    if install_if_missing:
+        node = download_node(cache)
+        runtime = node_runtime(node)
+        if runtime:
+            print('Dùng Node riêng để build:', node, flush=True)
+            return runtime
+    raise DeployError('Chưa tìm thấy Node.js 22.9+ cùng npm. Có thể chạy lại với --install-node-if-missing để tải Node riêng cho build. Chưa thay đổi website.')
 
 
 class Assets(HTMLParser):
     def __init__(self):
-        super().__init__(); self.paths = []
+        super().__init__(); self.paths = []; self.manifests = []
 
     def handle_starttag(self, tag, attributes):
         attrs = dict(attributes)
-        value = attrs.get('src') if tag == 'script' else attrs.get('href') if tag == 'link' and attrs.get('rel') == 'stylesheet' else None
-        if value and re.fullmatch(r'/assets/[A-Za-z0-9_./-]+', value) and '..' not in value:
+        value = attrs.get('src') if tag == 'script' else attrs.get('href') if tag == 'link' and attrs.get('rel') in ('stylesheet', 'manifest', 'icon', 'apple-touch-icon') else None
+        if tag == 'link' and attrs.get('rel') == 'manifest' and value:
+            self.manifests.append(value)
+        if value and re.fullmatch(r'/(?:assets/[A-Za-z0-9_./-]+|icons/[A-Za-z0-9_-]+\.png|manifest\.json|favicon\.svg)', value) and '..' not in value:
             self.paths.append(value)
 
 
@@ -155,10 +239,31 @@ def check_served(root, fetch):
     assets = Assets(); assets.feed(expected.decode())
     if not assets.paths:
         raise DeployError('Không thấy JS/CSS Vite trong index.html.')
-    for url in assets.paths:
+    if assets.manifests:
+        if assets.manifests != ['/manifest.json']:
+            raise DeployError('Manifest PWA chưa trỏ đúng ứng dụng Rentbook.')
+        manifest = json.loads((root / 'manifest.json').read_text())
+        if any(manifest.get(key) != value for key, value in {'id': '/', 'start_url': '/', 'scope': '/', 'display': 'standalone', 'short_name': 'Rentbook'}.items()):
+            raise DeployError('Manifest PWA chưa đúng URL hoặc chế độ cửa sổ Rentbook.')
+        sizes = set()
+        for item in manifest.get('icons', []):
+            url = item.get('src', '')
+            if not re.fullmatch(r'/icons/[A-Za-z0-9_-]+\.png', url):
+                raise DeployError('Đường dẫn icon PWA không hợp lệ.')
+            data = (root / url.lstrip('/')).read_bytes()
+            if len(data) < 24 or data[:8] != b'\x89PNG\r\n\x1a\n':
+                raise DeployError('Icon PWA chưa phải ảnh PNG hợp lệ.')
+            width, height = struct.unpack('!II', data[16:24])
+            if item.get('sizes') != f'{width}x{height}':
+                raise DeployError('Kích thước icon PWA chưa đúng manifest.')
+            sizes.add((width, height)); assets.paths.append(url)
+        if not {(192, 192), (512, 512)} <= sizes or not (root / 'sw.js').is_file():
+            raise DeployError('Bản PWA thiếu icon hoặc service worker.')
+        assets.paths.append('/sw.js')
+    for url in dict.fromkeys(assets.paths):
         path = root / url.lstrip('/')
         if path.is_symlink() or not path.is_file() or hashlib.sha256(fetch(url)).digest() != hashlib.sha256(path.read_bytes()).digest():
-            raise DeployError('Kiểm tra tài nguyên JS/CSS qua Nginx thất bại.')
+            raise DeployError('Kiểm tra tài nguyên qua Nginx thất bại: ' + url)
 
 
 def publish(dist, root):
@@ -207,6 +312,7 @@ def deploy(dist, root, backup, verify):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, default=Path('/opt/chothue'))
+    parser.add_argument('--install-node-if-missing', action='store_true', help='Tải Node 24 vào cache root riêng nếu thiếu Node/npm phù hợp.')
     args = parser.parse_args()
     if os.geteuid() != 0:
         raise DeployError('Chạy bằng root trên VPS.')
@@ -227,7 +333,7 @@ def main():
         raise DeployError('Thư mục Nginx chứa mã nguồn/cấu hình; cần kiểm tra riêng.')
     if any(path.is_symlink() for path in root.rglob('*')):
         raise DeployError('Bản web hiện tại có symlink bên trong; cần kiểm tra riêng trước khi thay đổi.')
-    env, npm = find_node(source)
+    env, npm = find_node(source, args.install_node_if_missing)
 
     def fetch(url):
         return subprocess.check_output(['curl', '--fail', '--silent', '--show-error', '--connect-timeout', '5', '--max-time', '20',
@@ -242,6 +348,7 @@ def main():
     shutil.copytree(checkout, build, ignore=shutil.ignore_patterns('.git', 'node_modules', 'dist', '.env', '.env.*', 'test-results', '__pycache__'))
     env_file = build / '.env.local'
     env_file.write_text(''.join(f'{k}={v}\n' for k, v in settings.items())); env_file.chmod(0o600)
+    env = {k: v for k, v in env.items() if not k.startswith('VITE_')}
     env.update(settings)
     print('Đang cài dependencies và build Rentbook với SSO...', flush=True)
     subprocess.run([npm, 'ci'], cwd=build, env=env, check=True)
@@ -254,6 +361,7 @@ def main():
 
     if not js or not any(contains_sso(p) for p in js):
         raise DeployError('Bản build chưa chứa nút đăng nhập Filezuno; không phát hành.')
+    check_served(dist, lambda url: (dist / ('index.html' if url == '/' else url.lstrip('/'))).read_bytes())
     backup = stage / 'previous-web'
     print('Đang sao lưu và phát hành giao diện...', flush=True)
     try:
@@ -261,10 +369,10 @@ def main():
     except BaseException:
         print('Phát hành chưa qua kiểm tra; đã yêu cầu khôi phục tệp cũ từ:', backup, flush=True)
         raise
-    print('THÀNH CÔNG: Rentbook đã cập nhật, index và JS/CSS được xác minh qua Nginx HTTPS.')
+    print('THÀNH CÔNG: Rentbook đã cập nhật; index, JS/CSS và tài nguyên PWA được xác minh qua Nginx HTTPS.')
     print('Bản sao giao diện cũ:', backup)
     print('Không thay source /opt/chothue, .env.local, Nginx, dữ liệu hoặc license Supabase.')
-    print(f'Mở https://{DOMAIN}, Ctrl+F5, đăng xuất Rentbook rồi chọn Đăng nhập bằng Filezuno.')
+    print(f'Mở https://{DOMAIN} bằng Chrome hoặc Edge trên PC, chọn Cài Rentbook hoặc biểu tượng cài ứng dụng trên thanh địa chỉ.')
 
 
 if __name__ == '__main__':

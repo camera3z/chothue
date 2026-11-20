@@ -1,9 +1,14 @@
 import base64
 import importlib.util
+import hashlib
+import io
+import shutil
+import tarfile
 import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('deploy_sso', Path(__file__).resolve().parents[1]/'deploy/deploy-sso.py')
 d = importlib.util.module_from_spec(spec); spec.loader.exec_module(d)
@@ -15,7 +20,105 @@ def static(root, label):
     (root/'index.html').write_text(f'<script type="module" src="/assets/{label}.js"></script>')
 
 
+def pwa(root):
+    static(root,'app')
+    public=Path(__file__).resolve().parents[1]/'public'
+    shutil.copytree(public,root,dirs_exist_ok=True)
+    (root/'sw.js').write_text('self.addEventListener("fetch",()=>{});')
+    (root/'index.html').write_text('<link rel="manifest" href="/manifest.json"><link rel="icon" href="/favicon.svg"><link rel="apple-touch-icon" href="/icons/rentbook-180.png"><script type="module" src="/assets/app.js"></script>')
+
+
 class DeployTests(unittest.TestCase):
+    def test_pwa_health_checks_manifest_worker_and_all_icons_through_server(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);pwa(root);requested=[]
+            def fetch(url):
+                requested.append(url)
+                return (root/('index.html' if url=='/' else url.lstrip('/'))).read_bytes()
+            d.check_served(root,fetch)
+            for path in ['/manifest.json','/sw.js','/icons/rentbook-192.png','/icons/rentbook-512.png','/icons/rentbook-maskable-512.png','/icons/rentbook-180.png']:
+                self.assertIn(path,requested)
+
+    def test_pwa_manifest_cannot_launch_outside_rentbook_and_icons_must_match(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);pwa(root)
+            def fetch(url):return(root/('index.html' if url=='/' else url.lstrip('/'))).read_bytes()
+            manifest=json.loads((root/'manifest.json').read_text());manifest['start_url']='https://other.example.test/'
+            (root/'manifest.json').write_text(json.dumps(manifest))
+            with self.assertRaises(d.DeployError):d.check_served(root,fetch)
+            manifest['start_url']='/';manifest['icons'][0]['sizes']='512x512'
+            (root/'manifest.json').write_text(json.dumps(manifest))
+            with self.assertRaises(d.DeployError):d.check_served(root,fetch)
+
+    def test_pwa_missing_worker_or_spa_fallback_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);pwa(root)
+            def fetch(url):return(root/('index.html' if url=='/' or url=='/sw.js' else url.lstrip('/'))).read_bytes()
+            with self.assertRaises(d.DeployError):d.check_served(root,fetch)
+            (root/'sw.js').unlink()
+            with self.assertRaises(d.DeployError):d.check_served(root,fetch)
+
+    def test_reuses_rentbook_node_before_downloading_anything(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source=Path(directory)/'qrmenu'
+            node=Path(directory)/'chothue/.nvm/versions/node/v22.16.0/bin/node'
+            node.parent.mkdir(parents=True);node.touch()
+            expected=({'PATH':str(node.parent)},str(node.parent/'npm'))
+            with patch.object(d.shutil,'which',return_value=None), patch.object(d,'node_runtime',side_effect=lambda candidate:expected if candidate==node else None), patch.object(d,'download_node') as download:
+                self.assertEqual(d.find_node(source,True),expected)
+                download.assert_not_called()
+
+    def test_node_version_requirement_and_npm_are_checked_with_same_path(self):
+        node=Path('/test-node/bin/node')
+        for version in ['v20.19.0','v22.8.0','broken-version']:
+            with self.subTest(version=version),patch.object(d.subprocess,'check_output',return_value=version),patch.object(d.shutil,'which') as which:
+                self.assertIsNone(d.node_runtime(node));which.assert_not_called()
+        with patch.object(d.subprocess,'check_output',side_effect=['v22.9.0','10.9.0']) as run,patch.object(d.shutil,'which',return_value='/test-node/bin/npm'):
+            env,npm=d.node_runtime(node)
+            self.assertEqual(npm,'/test-node/bin/npm')
+            self.assertEqual(env['PATH'].split(d.os.pathsep)[0],str(node.parent))
+            self.assertEqual(run.call_args.kwargs['env']['PATH'],env['PATH'])
+
+    def test_unusable_npm_is_not_treated_as_a_working_runtime(self):
+        with patch.object(d.shutil,'which',return_value='/test-node/bin/npm'),patch.object(d.subprocess,'check_output',side_effect=['v24.11.0',d.subprocess.CalledProcessError(1,['npm','--version'])]):
+            self.assertIsNone(d.node_runtime(Path('/test-node/bin/node')))
+
+    def test_missing_runtime_download_requires_explicit_option(self):
+        with tempfile.TemporaryDirectory() as directory:
+            downloaded=Path(directory)/'downloaded/bin/node'
+            expected=({'PATH':str(downloaded.parent)},str(downloaded.parent/'npm'))
+            with patch.object(d.shutil,'which',return_value=None),patch.object(d,'node_runtime',side_effect=lambda candidate:expected if candidate==downloaded else None),patch.object(d,'download_node',return_value=downloaded) as download:
+                with self.assertRaises(d.DeployError):d.find_node(Path(directory)/'qrmenu')
+                download.assert_not_called()
+                self.assertEqual(d.find_node(Path(directory)/'qrmenu',True),expected)
+                download.assert_called_once()
+
+    def test_bad_node_checksum_stops_before_extracting_or_running(self):
+        filename='node-v24.11.0-linux-x64.tar.xz'
+        manifest=(hashlib.sha256(b'expected archive').hexdigest()+'  '+filename+'\n').encode()
+        with tempfile.TemporaryDirectory() as directory,patch.object(d.platform,'machine',return_value='x86_64'),patch.object(d.platform,'system',return_value='Linux'),patch.object(d,'urlopen',side_effect=[io.BytesIO(manifest),io.BytesIO(b'tampered archive')]),patch.object(d.subprocess,'run') as extract:
+            cache=Path(directory)/'cache'
+            with self.assertRaisesRegex(d.DeployError,'SHA-256'):d.download_node(cache)
+            extract.assert_not_called()
+            self.assertEqual(list(cache.iterdir()),[])
+
+    def test_verified_node_download_runs_from_private_cache(self):
+        name='node-v24.11.0-linux-x64';buffer=io.BytesIO()
+        with tarfile.open(fileobj=buffer,mode='w:xz') as archive:
+            for program,version in [('node','v24.11.0'),('npm','10.9.0')]:
+                body=f'#!/bin/sh\nprintf "{version}\\n"\n'.encode()
+                info=tarfile.TarInfo(name+'/bin/'+program);info.size=len(body);info.mode=0o755
+                archive.addfile(info,io.BytesIO(body))
+        content=buffer.getvalue()
+        manifest=(hashlib.sha256(content).hexdigest()+'  '+name+'.tar.xz\n').encode()
+        with tempfile.TemporaryDirectory() as directory,patch.object(d.platform,'machine',return_value='x86_64'),patch.object(d.platform,'system',return_value='Linux'),patch.object(d,'urlopen',side_effect=[io.BytesIO(manifest),io.BytesIO(content)]):
+            cache=Path(directory)/'cache';node=d.download_node(cache)
+            self.assertEqual(node,cache/name/'bin/node')
+            env,npm=d.node_runtime(node)
+            self.assertEqual(Path(npm),node.parent/'npm')
+            self.assertEqual(env['PATH'].split(d.os.pathsep)[0],str(node.parent))
+            self.assertEqual(list(cache.iterdir()),[cache/name])
+
     def test_resolves_only_rentbook_and_keeps_other_hosts_separate(self):
         config = '''# configuration file /etc/nginx/nginx.conf:
         events {} http {

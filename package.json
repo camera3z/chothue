@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test:smoke": "node tests/rental-smoke.mjs",
-    "test:booking-sql": "node tests/booking-sql.mjs"
+    "test:booking-sql": "node tests/booking-sql.mjs",
+    "test:pwa": "node tests/pwa-browser.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.99.1"
