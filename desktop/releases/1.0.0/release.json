@@ -1,0 +1,15 @@
+{
+  "name": "Rentbook Desktop",
+  "version": "1.0.0",
+  "file": "RentbookSetup.exe",
+  "platform": "Windows 10/11",
+  "application_url": "https://thue.filezuno.net/",
+  "mode": "existing-browser-app-window",
+  "compiler": "v3.11-1",
+  "release_stage": "test-build",
+  "source_sha256": "3b15ccfd73c5e022607b37c7d18d9332b2b7ee8c1d8da2d19c730e79dd5227db",
+  "size": 488798,
+  "sha256": "dc38c0770907d0fae3008a2f79306493994aa46e470766c3a1719f760244709e",
+  "authenticode_status": "unsigned",
+  "launcher_sha256": "a2d24b96ce1f0e05c322cea8983dfb5cc6fc1ba5a1d6be2d1fc12ff7f5bb1bbf"
+}

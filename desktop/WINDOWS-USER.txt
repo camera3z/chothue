@@ -1,0 +1,26 @@
+RENTBOOK DESKTOP — HƯỚNG DẪN SỬ DỤNG
+
+1. Chạy RentbookSetup.exe để cài vào tài khoản Windows hiện tại.
+2. Mở Rentbook Desktop từ desktop hoặc menu Start.
+3. Đăng nhập bằng tài khoản Filezuno hoặc email Rentbook đang dùng.
+4. Kiểm tra đúng cửa hàng và hạn bản quyền trước khi làm việc.
+
+Ứng dụng mở trong cửa sổ riêng, không phải nhập URL. Nó dùng Chrome có trên
+máy; nếu không có Chrome thì dùng Microsoft Edge. Máy cần Internet để
+tải và lưu dữ liệu.
+
+Nếu mở bằng một hồ sơ trình duyệt khác, bạn có thể cần đăng nhập lại bằng
+cùng tài khoản. Dữ liệu và bản quyền vẫn gắn với tài khoản, không gắn bộ cài.
+
+Đổi giao diện/chức năng web không yêu cầu cài lại. Khi có bản mới, lưu thao
+tác đang làm trước khi tải lại theo thông báo của Rentbook.
+
+Gỡ cài đặt trong Windows Settings > Apps > Rentbook Desktop. Bộ gỡ chỉ xóa
+launcher, biểu tượng và hướng dẫn của ứng dụng; dữ liệu cửa hàng, phiên
+trình duyệt và bản quyền trên máy chủ vẫn được giữ.
+
+Bản thử hiện chưa có chữ ký số Authenticode; Windows có thể cảnh báo nhà
+phát hành chưa xác định. Không tắt Windows Defender hoặc SmartScreen.
+
+Website: https://filezuno.net
+Ứng dụng: https://thue.filezuno.net
