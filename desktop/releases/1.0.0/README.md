@@ -7,8 +7,12 @@ Chrome hoặc Edge và kết nối Internet. Đăng nhập bằng tài khoản F
 hoặc email Rentbook hiện tại; dữ liệu và bản quyền gắn với tài khoản đó.
 
 Bản thử chưa có chữ ký số Authenticode. Windows có thể cảnh báo nhà phát
-hành chưa xác định. Chưa kiểm tra cài/gỡ trên Windows thật; chưa phải bản
-phân phối chính thức cho khách. Không tắt SmartScreen hoặc Defender.
+hành chưa xác định. Chưa phải bản phân phối chính thức cho khách. Không tắt
+SmartScreen hoặc Defender.
+
+Ngày 21/11/2026, người dùng xác nhận bộ cài này và PWA cài qua trình duyệt
+đều cài và chạy thành công trên PC. Chưa có xác nhận gỡ cài đặt hoặc kiểm
+tra riêng từng phiên bản Windows/trình duyệt.
 
 Đã kiểm tra biên dịch PE Windows không đòi admin, giải nén/đối chiếu nội
 dung gói và chế độ cửa sổ Chromium. Xem [hướng dẫn kỹ thuật](../../README.md),

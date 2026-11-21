@@ -4,7 +4,7 @@
 
 Rentbook có bản **PWA cài trên PC bằng Chrome/Edge**, mở cửa sổ riêng và dùng dữ liệu/tài khoản hiện có. Cần kết nối mạng để làm việc. Hướng dẫn cài, phát hành và kiểm tra tại **[deploy/PWA.md](deploy/PWA.md)**.
 
-Có thêm **[bộ cài Rentbook Desktop cho Windows](desktop/README.md)**: một file `.exe` tạo biểu tượng Desktop/Start, mở cửa sổ riêng bằng Chrome/Edge hiện có. Bản 1.0.0 đang ở giai đoạn thử, chưa ký số và chưa kiểm tra cài/gỡ trên Windows thật.
+Có thêm **[bộ cài Rentbook Desktop cho Windows](desktop/README.md)**: một file `.exe` tạo biểu tượng Desktop/Start, mở cửa sổ riêng bằng Chrome/Edge hiện có. Ngày 21/11/2026, người dùng xác nhận cả bộ cài 1.0.0 và PWA qua trình duyệt đều cài và chạy thành công trên PC. Bộ cài vẫn là bản thử chưa ký số; chưa xác nhận gỡ cài đặt.
 
 ## Chạy demo
 

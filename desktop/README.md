@@ -31,8 +31,11 @@ và metadata. Bản thử **chưa có chữ ký số Authenticode**; Windows có
 nhà phát hành chưa xác định. Không hướng dẫn tắt SmartScreen/Defender.
 
 Đã biên dịch và kiểm tra cấu trúc PE, quyền thực thi, nội dung gói và chế độ
-cửa sổ Chromium trên Linux. **Chưa chạy cài/gỡ trên Windows thật.** Chưa đưa
-nút tải bản này lên trang bán hàng cho khách.
+cửa sổ Chromium trên Linux. **Ngày 21/11/2026, người dùng xác nhận cả bộ cài
+`.exe` 1.0.0 và PWA cài qua trình duyệt đều cài và chạy thành công trên PC.**
+Đây là kết quả người dùng báo lại, không phải kiểm thử Windows do Codex chạy;
+chưa xác nhận phiên bản Windows/trình duyệt hoặc gỡ cài đặt. Chưa đưa nút tải
+bản này lên trang bán hàng cho khách.
 
 ## Build
 
