@@ -88,6 +88,7 @@ try {
 
   const installEntry = page.locator('.side-bottom [data-pwa-install]');
   await installEntry.waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#rentbook-install-help[open]').count(), 0);
   assert.equal(await installEntry.textContent(), 'Cài Rentbook trên PC');
   assert.equal(await page.locator('[data-pwa-install]:visible').count(), 1);
   if (process.env.PWA_TEST_ARTIFACTS) {
@@ -171,6 +172,44 @@ try {
   assert.equal(await storefront.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length), 0);
   await customer.close();
   console.log('PASS public storefront: no admin install prompt or new worker registration');
+
+  const entryContext = await browser.newContext();
+  await entryContext.route('https://*.supabase.co/**', mock);
+  await entryContext.addInitScript(() => window.addEventListener('beforeinstallprompt', event => {
+    if (event.isTrusted) { event.preventDefault(); event.stopImmediatePropagation(); }
+  }, true));
+  const entryPage = await entryContext.newPage();
+  await entryPage.goto(origin + '/?install=1&state=preserve&keep=1#auth-form');
+  const entryGuide = entryPage.getByRole('dialog', { name: 'Cài Rentbook trên PC' });
+  await entryGuide.waitFor();
+  await entryPage.locator('#filezunoSignIn').waitFor({ state: 'attached' });
+  assert.equal(new URL(entryPage.url()).searchParams.has('install'), false);
+  assert.equal(new URL(entryPage.url()).searchParams.get('state'), 'preserve');
+  assert.equal(new URL(entryPage.url()).searchParams.get('keep'), '1');
+  assert.equal(new URL(entryPage.url()).hash, '#auth-form');
+  await entryPage.evaluate(() => {
+    window.entryPromptCount = 0;
+    const event = new Event('beforeinstallprompt', { cancelable: true });
+    event.prompt = async () => { window.entryPromptCount++; };
+    event.userChoice = Promise.resolve({ outcome: 'dismissed', platform: 'web' });
+    window.dispatchEvent(event);
+  });
+  await entryPage.locator('[data-pwa-install-now]').waitFor({ state: 'visible' });
+  assert.equal(await entryPage.evaluate(() => window.entryPromptCount), 0);
+  await entryPage.locator('[data-pwa-install-now]').click();
+  assert.equal(await entryPage.evaluate(() => window.entryPromptCount), 1);
+  assert.equal(await entryGuide.isVisible(), true);
+  // Simulate display-mode only; this does not install an app into the OS.
+  await entryContext.addInitScript(() => {
+    const original = window.matchMedia.bind(window);
+    window.matchMedia = query => query === '(display-mode: standalone)' ? { matches: true, addEventListener() {} } : original(query);
+  });
+  await entryPage.goto(origin + '/?install=1');
+  await entryPage.locator('#filezunoSignIn').waitFor();
+  assert.equal(await entryPage.locator('#rentbook-install-help[open]').count(), 0);
+  assert.equal(new URL(entryPage.url()).searchParams.has('install'), false);
+  await entryContext.close();
+  console.log('PASS Filezuno entry: install guide without login, late native prompt requires click, standalone entry skips guide, other query/hash preserved');
 
   await page.locator('[data-signout]:visible').first().click(); await page.locator('#filezunoSignIn').waitFor();
   assert.equal(await page.evaluate(async () => (await caches.keys()).length), 0);

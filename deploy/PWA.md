@@ -11,6 +11,31 @@ Website: **https://thue.filezuno.net**. PWA cài từ Chrome/Edge, có biểu t�
 
 Trang công khai `?shop=...` dành cho khách đặt thuê không hiện nút cài ứng dụng quản trị. Nút cài tự ẩn trong cửa sổ PWA. Trong trình duyệt thường, nút luôn hiện dù chưa có `beforeinstallprompt`; việc người dùng đóng hộp cài không làm mất đường dẫn tới hướng dẫn.
 
+## Mở hoặc cài từ danh sách Web App Filezuno
+
+Nút **Mở ứng dụng** trên thẻ Rentbook ở danh sách Filezuno đi tới
+`https://thue.filezuno.net/?install=1`, không qua trang chi tiết sản phẩm.
+
+- Nếu Rentbook đã cài và trình duyệt cho phép ứng dụng xử lý liên kết đó,
+  liên kết mở cửa sổ PWA. Trong chế độ standalone không hiện hướng dẫn cài lại.
+- Nếu mở trong trình duyệt thường, Rentbook hiện ngay phần cài đặt, kể cả
+  chưa đăng nhập. Có `beforeinstallprompt` thì hiện **Cài đặt ngay**; nếu
+  chưa có thì hướng dẫn cài qua menu Chrome/Edge. Người dùng vẫn phải bấm
+  xác nhận; lượt bấm ở domain Filezuno không thể thay cho xác nhận cài trên
+  domain Rentbook. Không tự gọi native prompt khi event đến muộn.
+- Chỉ xóa tham số `install=1` sau khi tiếp nhận, giữ các query khác và hash.
+  Đóng hướng dẫn rồi tải lại không tiếp tục mời cài. Không áp dụng cho `?shop`.
+- Nếu đã cài nhưng trình duyệt vẫn mở tab, kiểm tra tùy chọn mở liên kết
+  được hỗ trợ trong cài đặt PWA hoặc mở từ Start. Website không thể ép
+  trình duyệt khác/hồ sơ khác hoặc bỏ qua lựa chọn mở liên kết của người dùng.
+
+Chrome 139+ hỗ trợ tự mở liên kết thuộc scope trong PWA theo tùy chọn người
+dùng: [tài liệu Chrome](https://developer.chrome.com/docs/capabilities/pwa-navigation-management).
+Hộp cài vẫn do trình duyệt kiểm soát: [tài liệu cài PWA](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/How_to/Trigger_install_prompt).
+
+Khi triển khai tính năng này, phát hành Rentbook trước, sau đó Filezuno.
+Không cần chạy SQL hoặc cấu hình lại provider/bản quyền/SePay.
+
 ## Kết nối, dữ liệu và cập nhật
 
 - **Đây là ứng dụng online.** Cần mạng để tải dữ liệu và lưu thay đổi. Khi đang mở mà mất mạng, có thông báo; khởi động khi offline chỉ hiện trang hướng dẫn kết nối lại.
@@ -52,4 +77,4 @@ npm run test:pwa
 PYTHONDONTWRITEBYTECODE=1 python3 tests/deploy-sso.py
 ```
 
-Browser test build production riêng với public config giả lập; Chromium kiểm tra manifest/installability thật, worker waiting/update, giữ bản nháp, offline fallback, API không cache, callback, storefront công khai và SSO PKCE. Thao tác nút cài dùng event giả lập; test **không cài vào hệ điều hành**. Cần xác nhận một lần cài/mở từ Start và đăng nhập trên Windows thực tế sau phát hành. Không dùng dữ liệu hay project thật trong các kiểm tra tự động.
+Browser test build production riêng với public config giả lập; Chromium kiểm tra manifest/installability thật, worker waiting/update, giữ bản nháp, offline fallback, API không cache, callback, storefront công khai và SSO PKCE. Kiểm tra `?install=1` ở trang đăng nhập, event đến muộn, giữ query/hash và bỏ hướng dẫn khi giả lập standalone. Thao tác nút cài dùng event giả lập; test **không cài vào hệ điều hành hoặc chứng minh link capturing Windows**. Người dùng đã xác nhận PWA và bộ cài PC chạy được ngày 21/11/2026; nút mở/cài mới từ Filezuno vẫn cần kiểm tra trên PC sau phát hành. Không dùng dữ liệu hay project thật trong các kiểm tra tự động.

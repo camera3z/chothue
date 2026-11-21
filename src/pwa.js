@@ -59,6 +59,14 @@ export function startPWA() {
   enabled = true;
   const displayMode = matchMedia('(display-mode: standalone)');
   installed = displayMode.matches || navigator.standalone === true;
+  const entry = new URL(location.href);
+  if (entry.searchParams.get('install') === '1') {
+    // A link from Filezuno can request install help, but cannot transfer the
+    // user activation required to open a native prompt on another origin.
+    entry.searchParams.delete('install');
+    history.replaceState(history.state, '', entry.href);
+    if (!installed) showInstallHelp();
+  }
   displayMode.addEventListener('change', () => { installed = displayMode.matches; syncPWAControls(); });
   window.addEventListener('beforeinstallprompt', event => {
     event.preventDefault(); promptEvent = event; syncPWAControls();
