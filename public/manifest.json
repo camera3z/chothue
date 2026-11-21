@@ -10,6 +10,9 @@
   "background_color": "#f2f5f6",
   "theme_color": "#0b6b70",
   "categories": ["business", "productivity"],
+  "related_applications": [
+    { "platform": "webapp", "url": "/manifest.json", "id": "https://thue.filezuno.net/" }
+  ],
   "icons": [
     { "src": "/icons/rentbook-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "/icons/rentbook-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },

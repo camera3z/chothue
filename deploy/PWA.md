@@ -11,6 +11,34 @@ Website: **https://thue.filezuno.net**. PWA cài từ Chrome/Edge, có biểu t�
 
 Trang công khai `?shop=...` dành cho khách đặt thuê không hiện nút cài ứng dụng quản trị. Nút cài tự ẩn trong cửa sổ PWA. Trong trình duyệt thường, nút luôn hiện dù chưa có `beforeinstallprompt`; việc người dùng đóng hộp cài không làm mất đường dẫn tới hướng dẫn.
 
+### Khi PWA đã cài nhưng đang mở bằng tab web
+
+Ngày 21/11 người dùng xác nhận PWA vẫn còn trong đúng hồ sơ đang mở tab.
+Trình duyệt sẽ không gửi `beforeinstallprompt` để cài lại app đang có; bản
+cũ chỉ kiểm tra display-mode của cửa sổ nên vẫn hiện hướng dẫn cài.
+
+Manifest nay tự khai báo Rentbook trong `related_applications` với platform
+`webapp`, URL manifest và id `https://thue.filezuno.net/`. Trong tab thường,
+ứng dụng dùng `getInstalledRelatedApps()` để nhận diện chính PWA này khi
+API hỗ trợ (desktop Chrome/Edge 140+). Có kết quả dương tính thì nút đổi
+thành **Mở Rentbook**, hộp hướng dẫn hiện **Rentbook đã được cài** và liên
+kết mở root trong cửa sổ mới. Không dùng localStorage làm bằng chứng cài;
+API lỗi, không hỗ trợ hoặc trả rỗng không chứng minh PWA chưa được cài.
+
+Nếu chưa có native prompt, nút trong hộp vẫn hiện trạng thái chưa sẵn sàng
+và bị vô hiệu, có giải thích và hướng dẫn menu/Start; không tạo nút cài giả.
+Khi native prompt đến, nút được bật. Có **Kiểm tra lại** và kiểm tra khi
+trở lại cửa sổ. Kết quả kiểm tra đến muộn không ghi đè native prompt hoặc
+sự kiện cài mới hơn. Không yêu cầu gỡ PWA, xóa phiên hoặc xóa dữ liệu.
+
+Nhận diện cài đặt không có quyền ép mở cửa sổ PWA. Nếu người dùng chọn mở
+link bằng browser hoặc dùng hồ sơ khác, cần mở từ Start hoặc bật mở liên
+kết bằng Rentbook trong cài đặt ứng dụng. Giữ id/start_url/scope cũ để bản
+PWA đã cài vẫn là cùng ứng dụng.
+
+Nguồn: [kiểm tra PWA đã cài](https://developer.chrome.com/docs/capabilities/get-installed-related-apps),
+[điều kiện hiện hộp cài](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/How_to/Trigger_install_prompt).
+
 ## Mở hoặc cài từ danh sách Web App Filezuno
 
 Nút **Mở ứng dụng** trên thẻ Rentbook ở danh sách Filezuno đi tới

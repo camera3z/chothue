@@ -81,6 +81,7 @@ try {
   const manifest = JSON.parse(appManifest.data);
   assert.equal(manifest.name, 'Rentbook – Quản lý cho thuê'); assert.equal(manifest.display, 'standalone');
   assert.equal(manifest.start_url, '/'); assert.equal(manifest.scope, '/');
+  assert.deepEqual(manifest.related_applications, [{ platform: 'webapp', url: '/manifest.json', id: 'https://thue.filezuno.net/' }]);
   const installability = await protocol.send('Page.getInstallabilityErrors');
   assert.deepEqual(installability.installabilityErrors, []);
   assert.equal(await page.evaluate(async () => (await navigator.serviceWorker.getRegistration()).updateViaCache), 'none');
@@ -98,7 +99,8 @@ try {
   await installEntry.click();
   const guide = page.getByRole('dialog', { name: 'Cài Rentbook trên PC' });
   await guide.waitFor();
-  assert.equal(await page.locator('[data-pwa-install-now]').isHidden(), true);
+  assert.equal(await page.locator('[data-pwa-install-now]').isVisible(), true);
+  assert.equal(await page.locator('[data-pwa-install-now]').isDisabled(), true);
   await guide.getByRole('heading', { name: 'Google Chrome' }).waitFor();
   await guide.getByRole('heading', { name: 'Microsoft Edge' }).waitFor();
   if (process.env.PWA_TEST_ARTIFACTS) await page.screenshot({ path: join(process.env.PWA_TEST_ARTIFACTS, 'rentbook-install-guide.png'), fullPage: true });
@@ -116,7 +118,7 @@ try {
     window.dispatchEvent(event);
   });
   await page.locator('[data-pwa-install-now]').click();
-  await page.locator('[data-pwa-install-now]').waitFor({ state: 'hidden' });
+  await page.waitForFunction(() => document.querySelector('[data-pwa-install-now]').disabled);
   assert.equal(installPrompts, 1); assert.equal(await guide.isVisible(), true);
   await guide.getByRole('button', { name: 'Đã hiểu', exact: true }).click();
   await installEntry.click(); await guide.waitFor();
@@ -129,10 +131,10 @@ try {
   });
   await installEntry.click(); assert.equal(installPrompts, 2);
   await page.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
-  assert.equal(await page.locator('[data-pwa-install]:visible').count(), 0);
+  assert.equal(await installEntry.textContent(), 'Mở Rentbook');
   await page.getByText('Đã cài Rentbook. Bạn có thể mở ứng dụng từ menu Start.').waitFor();
   assert.equal(await page.evaluate(async () => (await caches.keys()).length), 0);
-  console.log('PASS install controls: offered prompt is used once; installed state hides button; no app data cache');
+  console.log('PASS install controls: offered prompt is used once; installed browser tab offers open action; no app data cache');
 
   await page.locator('.snav [data-view=assets]').click(); await page.locator('[data-add=asset]').click();
   await page.locator('#modal [name=name]').fill('Bản nháp cần giữ');
@@ -210,6 +212,63 @@ try {
   assert.equal(new URL(entryPage.url()).searchParams.has('install'), false);
   await entryContext.close();
   console.log('PASS Filezuno entry: install guide without login, late native prompt requires click, standalone entry skips guide, other query/hash preserved');
+
+  const knownInstalled = await browser.newContext();
+  await knownInstalled.route('https://*.supabase.co/**', mock);
+  await knownInstalled.addInitScript(() => {
+    Object.defineProperty(navigator, 'getInstalledRelatedApps', { configurable: true, value: async () => [
+      { platform: 'webapp', id: location.origin + '/', url: location.origin + '/manifest.json' },
+    ] });
+  });
+  const knownPage = await knownInstalled.newPage();
+  await knownPage.goto(origin + '/?install=1');
+  const installedGuide = knownPage.getByRole('dialog', { name: 'Rentbook đã được cài' });
+  await installedGuide.waitFor();
+  assert.equal(await knownPage.locator('[data-pwa-install-now]').isHidden(), true);
+  await installedGuide.getByRole('link', { name: 'Mở Rentbook', exact: true }).waitFor();
+  assert.equal(await knownPage.locator('.pwa-browser-help').isHidden(), true);
+  assert.equal(await knownPage.locator('[data-pwa-open-help]').isVisible(), true);
+  for (const width of [1440, 375, 320]) {
+    await knownPage.setViewportSize({ width, height: 900 });
+    assert.equal(await knownPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  }
+  if (process.env.PWA_TEST_ARTIFACTS) await knownPage.screenshot({ path: join(process.env.PWA_TEST_ARTIFACTS, 'rentbook-already-installed.png'), fullPage: true });
+  const openWindow = knownPage.waitForEvent('popup');
+  await installedGuide.getByRole('link', { name: 'Mở Rentbook', exact: true }).click();
+  const openPage = await openWindow; await openPage.waitForLoadState();
+  assert.equal(openPage.url(), origin + '/');
+  assert.equal(await openPage.evaluate(() => window.opener === null), true);
+  await openPage.close();
+  await knownInstalled.close();
+
+  const pendingProbe = await browser.newContext();
+  await pendingProbe.route('https://*.supabase.co/**', mock);
+  await pendingProbe.addInitScript(() => {
+    Object.defineProperty(navigator, 'getInstalledRelatedApps', { configurable: true, value: () => new Promise(resolve => { window.resolveProbe = resolve; }) });
+  });
+  const racePage = await pendingProbe.newPage();
+  await racePage.goto(origin + '/?install=1');
+  await racePage.getByRole('dialog', { name: 'Cài Rentbook trên PC' }).waitFor();
+  await racePage.evaluate(() => {
+    const offer = new Event('beforeinstallprompt', { cancelable: true });
+    offer.prompt = async () => {}; offer.userChoice = Promise.resolve({ outcome: 'dismissed' });
+    window.dispatchEvent(offer);
+    window.resolveProbe([{ platform: 'webapp', id: location.origin + '/' }]);
+  });
+  assert.equal(await racePage.locator('[data-pwa-install-now]').isEnabled(), true);
+  assert.equal(await racePage.locator('[data-pwa-open]').isHidden(), true);
+  await pendingProbe.close();
+  const failedProbe = await browser.newContext();
+  await failedProbe.route('https://*.supabase.co/**', mock);
+  await failedProbe.addInitScript(() => Object.defineProperty(navigator, 'getInstalledRelatedApps', { configurable: true, value: async () => { throw Error('unavailable'); } }));
+  const failedPage = await failedProbe.newPage();
+  await failedPage.goto(origin + '/?install=1');
+  await failedPage.getByRole('dialog', { name: 'Cài Rentbook trên PC' }).waitFor();
+  assert.equal(await failedPage.locator('[data-pwa-install-now]').isVisible(), true);
+  assert.equal(await failedPage.locator('[data-pwa-install-now]').isDisabled(), true);
+  await failedPage.locator('#filezunoSignIn').waitFor({ state: 'attached' });
+  await failedProbe.close();
+  console.log('PASS already-installed regression: related-app detection offers open, fallback stays explicit, late install evidence cannot override a native offer, detection failure keeps sign-in working');
 
   await page.locator('[data-signout]:visible').first().click(); await page.locator('#filezunoSignIn').waitFor();
   assert.equal(await page.evaluate(async () => (await caches.keys()).length), 0);

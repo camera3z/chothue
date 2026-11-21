@@ -1,4 +1,4 @@
-[data-pwa-install][hidden],[data-pwa-install-now][hidden],[data-pwa-update][hidden],#rentbook-pwa-notice[hidden]{display:none!important}
+[data-pwa-install][hidden],[data-pwa-install-now][hidden],[data-pwa-update][hidden],#rentbook-pwa-notice[hidden],.pwa-install-help [hidden]{display:none!important}
 .account-header{flex-wrap:wrap;row-gap:8px}
 .account-header .pwa-install{color:var(--accent);border-color:var(--accent);background:var(--surface);white-space:nowrap}
 .account-header .pwa-update{color:var(--warn);background:var(--warn-soft);white-space:nowrap}
@@ -13,7 +13,11 @@
 .pwa-browser-help h3{font-size:14px;margin:16px 0 6px}
 .pwa-browser-help p{font-size:13px;margin:0 0 16px}
 .pwa-help-note{font-size:12px}
-.pwa-help-footer{display:flex;justify-content:flex-end;margin-top:20px}
+.pwa-help-footer{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-top:20px}
+.pwa-install-help .pwa-install-status{padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--raise);font-size:13px}
+.pwa-install-help [data-pwa-install-now]{max-width:100%;white-space:normal}
+.pwa-install-help [data-pwa-install-now]:disabled{opacity:.65;cursor:default}
+.pwa-install-help [data-pwa-open]{text-decoration:none;font-weight:600}
 @media(min-width:880px){.shell .account-header [data-pwa-install]{display:none!important}}
 #rentbook-pwa-notice{position:fixed;z-index:150;bottom:20px;left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100vw - 32px);padding:12px 18px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);box-shadow:var(--shadow);font-size:13px;line-height:1.7}
 #rentbook-pwa-notice[data-kind=offline]{border-color:var(--warn);background:var(--warn-soft);color:var(--warn)}

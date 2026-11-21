@@ -1,11 +1,12 @@
 import './pwa.css';
 
-let enabled = false, installed = false, promptEvent = null, registration = null, applyingUpdate = false;
+let enabled = false, installed = false, installedOnDevice = false, promptEvent = null, registration = null, applyingUpdate = false;
+let installEvidence = 0, installProbe = null;
 let noticeTimer;
-const controls = '[data-pwa-install], [data-pwa-install-now], [data-pwa-help-close], [data-pwa-update]';
+const controls = '[data-pwa-install], [data-pwa-install-now], [data-pwa-help-close], [data-pwa-update], [data-pwa-recheck]';
 
 export function pwaInstallButton(sidebar = false) {
-  return `<button type="button" class="btn sm pwa-install" data-pwa-install hidden>${sidebar ? 'Cài Rentbook trên PC' : 'Cài Rentbook'}</button>`;
+  return `<button type="button" class="btn sm pwa-install" data-pwa-install ${sidebar ? 'data-pwa-sidebar' : ''} hidden>${sidebar ? 'Cài Rentbook trên PC' : 'Cài Rentbook'}</button>`;
 }
 
 export function pwaControls() {
@@ -15,13 +16,51 @@ export function pwaControls() {
 export function syncPWAControls() {
   document.querySelectorAll('[data-pwa-install]').forEach(button => {
     button.hidden = !enabled || installed;
+    button.textContent = installedOnDevice ? 'Mở Rentbook' : button.hasAttribute('data-pwa-sidebar') ? 'Cài Rentbook trên PC' : 'Cài Rentbook';
   });
   document.querySelectorAll('[data-pwa-install-now]').forEach(button => {
-    button.hidden = !enabled || installed || !promptEvent;
+    button.hidden = !enabled || installed || installedOnDevice;
+    button.disabled = !promptEvent;
+    button.textContent = promptEvent ? 'Cài đặt ngay' : 'Chưa có lời mời cài từ trình duyệt';
   });
+  const help = document.getElementById('rentbook-install-help');
+  if (help) {
+    help.querySelector('h2').textContent = installedOnDevice ? 'Rentbook đã được cài' : 'Cài Rentbook trên PC';
+    help.querySelector('[data-pwa-install-status]').textContent = installedOnDevice
+      ? 'Rentbook đã được cài trong hồ sơ trình duyệt này. Bạn có thể mở ứng dụng để tiếp tục làm việc.'
+      : promptEvent ? 'Rentbook đã sẵn sàng để cài. Chọn Cài đặt ngay và xác nhận trong hộp cài của trình duyệt.'
+      : 'Trình duyệt chưa cung cấp hộp cài. Có thể Rentbook đã được cài, lời mời cài đang tạm ẩn hoặc trình duyệt chưa hỗ trợ. Bạn vẫn có thể kiểm tra theo hướng dẫn bên dưới.';
+    help.querySelector('[data-pwa-open]').hidden = !installedOnDevice;
+    help.querySelector('.pwa-browser-help').hidden = installedOnDevice;
+    help.querySelector('[data-pwa-open-help]').hidden = !installedOnDevice;
+  }
   document.querySelectorAll('[data-pwa-update]').forEach(button => {
     button.hidden = !enabled || !registration?.waiting || !navigator.serviceWorker?.controller;
   });
+}
+
+function checkInstalledPWA() {
+  if (installed || typeof navigator.getInstalledRelatedApps !== 'function') return Promise.resolve();
+  if (installProbe) return installProbe;
+  const evidence = installEvidence;
+  installProbe = (async () => {
+    try {
+      const apps = await navigator.getInstalledRelatedApps();
+      if (evidence !== installEvidence || promptEvent) return;
+      const found = apps.some(app => {
+        if (app.platform !== 'webapp') return false;
+        try {
+          return app.id ? new URL(app.id, location.origin).href === new URL('/', location.origin).href
+            : new URL(app.url, location.origin).href === new URL('/manifest.json', location.origin).href;
+        } catch { return false; }
+      });
+      // An empty result on older browsers is not proof that the PWA is absent.
+      // A new beforeinstallprompt event can supersede earlier install evidence.
+      if (found) installedOnDevice = true;
+      syncPWAControls();
+    } catch { /* An unavailable detection API must not block install or work. */ }
+  })().finally(() => { installProbe = null; });
+  return installProbe;
 }
 
 function showInstallHelp() {
@@ -30,11 +69,12 @@ function showInstallHelp() {
     dialog = document.createElement('dialog');
     dialog.id = 'rentbook-install-help'; dialog.className = 'pwa-install-help';
     dialog.setAttribute('aria-labelledby', 'rentbook-install-title');
-    dialog.innerHTML = `<div class="pwa-help-header"><span class="brand"><i></i>Rentbook</span><button type="button" class="btn sm" data-pwa-help-close aria-label="Đóng hướng dẫn cài đặt">×</button></div><h2 id="rentbook-install-title">Cài Rentbook trên PC</h2><p>Mở Rentbook trong cửa sổ riêng, thuận tiện truy cập từ menu Start hoặc desktop.</p><button type="button" class="primary" data-pwa-install-now hidden>Cài đặt ngay</button><div class="pwa-browser-help"><h3>Google Chrome</h3><p>Chọn biểu tượng cài ứng dụng trên thanh địa chỉ. Hoặc mở menu <strong>⋮ → Truyền, lưu và chia sẻ → Cài đặt trang dưới dạng ứng dụng</strong>.</p><h3>Microsoft Edge</h3><p>Mở menu <strong>⋯ → Ứng dụng → Cài đặt trang này dưới dạng ứng dụng</strong>.</p></div><p class="pwa-help-note">Dùng cửa sổ trình duyệt thường. Nếu đã cài Rentbook, bạn có thể tìm ứng dụng trong menu Start.</p><p class="footnote">Rentbook cần Internet để làm việc. Tài khoản, dữ liệu và bản quyền hiện tại được dùng chung.</p><div class="pwa-help-footer"><button type="button" class="primary" data-pwa-help-close>Đã hiểu</button></div>`;
+    dialog.innerHTML = `<div class="pwa-help-header"><span class="brand"><i></i>Rentbook</span><button type="button" class="btn sm" data-pwa-help-close aria-label="Đóng hướng dẫn cài đặt">×</button></div><h2 id="rentbook-install-title">Cài Rentbook trên PC</h2><p>Mở Rentbook trong cửa sổ riêng, thuận tiện truy cập từ menu Start hoặc desktop.</p><p class="pwa-install-status" data-pwa-install-status role="status" aria-live="polite"></p><button type="button" class="primary" data-pwa-install-now>Cài đặt ngay</button><a class="btn primary" data-pwa-open href="/" target="_blank" rel="noopener noreferrer" hidden>Mở Rentbook</a><p data-pwa-open-help hidden>Nếu liên kết vẫn mở thành tab web: mở Rentbook từ menu Start, vào cài đặt ứng dụng trong trình duyệt và bật mở liên kết được hỗ trợ bằng Rentbook.</p><div class="pwa-browser-help"><h3>Google Chrome</h3><p>Chọn biểu tượng cài ứng dụng trên thanh địa chỉ. Hoặc mở menu <strong>⋮ → Truyền, lưu và chia sẻ → Cài đặt trang dưới dạng ứng dụng</strong>.</p><h3>Microsoft Edge</h3><p>Mở menu <strong>⋯ → Ứng dụng → Cài đặt trang này dưới dạng ứng dụng</strong>.</p></div><p class="pwa-help-note">Nếu đã cài Rentbook, mở ứng dụng từ menu Start hoặc biểu tượng trên desktop. Trình duyệt sẽ không mời cài lại bản PWA đang có trong cùng hồ sơ.</p><p class="footnote">Rentbook cần Internet để làm việc. Tài khoản, dữ liệu và bản quyền hiện tại được dùng chung.</p><div class="pwa-help-footer"><button type="button" class="btn" data-pwa-recheck>Kiểm tra lại</button><button type="button" class="primary" data-pwa-help-close>Đã hiểu</button></div>`;
     document.body.append(dialog);
   }
   syncPWAControls();
   if (!dialog.open) dialog.showModal();
+  checkInstalledPWA();
 }
 
 function notice(message, kind = 'status') {
@@ -69,10 +109,10 @@ export function startPWA() {
   }
   displayMode.addEventListener('change', () => { installed = displayMode.matches; syncPWAControls(); });
   window.addEventListener('beforeinstallprompt', event => {
-    event.preventDefault(); promptEvent = event; syncPWAControls();
+    event.preventDefault(); installEvidence++; installedOnDevice = false; promptEvent = event; syncPWAControls();
   });
   window.addEventListener('appinstalled', () => {
-    installed = true; promptEvent = null; syncPWAControls();
+    installEvidence++; installedOnDevice = true; promptEvent = null; syncPWAControls();
     document.getElementById('rentbook-install-help')?.close();
     notice('Đã cài Rentbook. Bạn có thể mở ứng dụng từ menu Start.');
   });
@@ -87,7 +127,10 @@ export function startPWA() {
   document.addEventListener('click', async event => {
     const button = event.target.closest(controls);
     if (!button || button.disabled) return;
-    if (button.hasAttribute('data-pwa-help-close')) {
+    if (button.hasAttribute('data-pwa-recheck')) {
+      button.disabled = true;
+      try { await checkInstalledPWA(); } finally { button.disabled = false; }
+    } else if (button.hasAttribute('data-pwa-help-close')) {
       document.getElementById('rentbook-install-help')?.close();
     } else if (button.hasAttribute('data-pwa-install') || button.hasAttribute('data-pwa-install-now')) {
       if (!promptEvent) { showInstallHelp(); return; }
@@ -106,6 +149,8 @@ export function startPWA() {
       else location.reload(); // Another app window may have applied it while the dialog was open.
     }
   });
+  checkInstalledPWA();
+  window.addEventListener('focus', () => checkInstalledPWA());
   navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' }).then(result => {
     registration = result;
     syncPWAControls();
