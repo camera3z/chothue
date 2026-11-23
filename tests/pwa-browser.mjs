@@ -8,7 +8,7 @@ import { chromium } from 'playwright';
 
 const temporary = await mkdtemp(join(tmpdir(), 'rentbook-pwa-test-'));
 const dist = join(temporary, 'dist');
-let server, context, browser, revision = 1, installPrompts = 0;
+let server, context, browser, revision = 1, installPrompts = 0, appProtocol, installedManifest, callbackFixture = false;
 const userId = '11111111-1111-4111-8111-111111111111';
 const orgId = '22222222-2222-4222-8222-222222222222';
 const user = { id: userId, aud: 'authenticated', role: 'authenticated', email: 'owner@example.test', user_metadata: { shop_name: 'Shop thử PWA' } };
@@ -23,6 +23,10 @@ try {
   assert.equal(await new Promise(r => build.once('exit', r)), 0, logs);
   server = createServer(async (request, response) => {
     const url = new URL(request.url, 'http://localhost');
+    if (callbackFixture && url.pathname === '/') {
+      response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      response.end('<h1>Callback received</h1>'); return;
+    }
     if (url.pathname === '/api/private') {
       response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
       response.end(JSON.stringify({ private_record: 'test-only' })); return;
@@ -49,7 +53,19 @@ try {
   await context.addInitScript(() => window.addEventListener('beforeinstallprompt', event => {
     if (event.isTrusted) { event.preventDefault(); event.stopImmediatePropagation(); }
   }, true));
+  // Observe the real browser's launch queue without replacing its behavior.
+  await context.addInitScript(() => {
+    if (!window.launchQueue) return;
+    const setConsumer = window.launchQueue.setConsumer.bind(window.launchQueue);
+    window.fixtureLaunchCount = 0;
+    window.launchQueue.setConsumer = consumer => setConsumer(params => {
+      window.fixtureLaunchCount++;
+      consumer(params);
+    });
+  });
   await context.addInitScript(({ token, user }) => {
+    // A newly created PWA target can briefly have an opaque about:blank origin.
+    if (location.origin === 'null') return;
     if (!localStorage.getItem('pwa-fixture-initialized')) {
       localStorage.setItem('pwa-fixture-initialized', '1');
       localStorage.setItem('sb-lkwnbvervvgbbvfosohi-auth-token', JSON.stringify({ access_token: token, refresh_token: 'test-refresh', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, token_type: 'bearer', user }));
@@ -81,6 +97,7 @@ try {
   const manifest = JSON.parse(appManifest.data);
   assert.equal(manifest.name, 'Rentbook – Quản lý cho thuê'); assert.equal(manifest.display, 'standalone');
   assert.equal(manifest.start_url, '/'); assert.equal(manifest.scope, '/');
+  assert.deepEqual(manifest.launch_handler, { client_mode: 'focus-existing' });
   assert.deepEqual(manifest.related_applications, [{ platform: 'webapp', url: '/manifest.json', id: 'https://thue.filezuno.net/' }]);
   const installability = await protocol.send('Page.getInstallabilityErrors');
   assert.deepEqual(installability.installabilityErrors, []);
@@ -260,7 +277,10 @@ try {
   await pendingProbe.close();
   const failedProbe = await browser.newContext();
   await failedProbe.route('https://*.supabase.co/**', mock);
-  await failedProbe.addInitScript(() => Object.defineProperty(navigator, 'getInstalledRelatedApps', { configurable: true, value: async () => { throw Error('unavailable'); } }));
+  await failedProbe.addInitScript(() => {
+    Object.defineProperty(window, 'launchQueue', { configurable: true, value: undefined });
+    Object.defineProperty(navigator, 'getInstalledRelatedApps', { configurable: true, value: async () => { throw Error('unavailable'); } });
+  });
   const failedPage = await failedProbe.newPage();
   await failedPage.goto(origin + '/?install=1');
   await failedPage.getByRole('dialog', { name: 'Cài Rentbook trên PC' }).waitFor();
@@ -278,7 +298,66 @@ try {
   assert.equal(authorize.searchParams.get('code_challenge_method'), 's256');
   assert.deepEqual(errors, []);
   console.log('PASS production SSO: old sign-in, exact callback and PKCE preserved with PWA enabled');
+
+  // Install only this localhost fixture in an isolated temporary Chromium
+  // profile. Exercise real PWA launches, not a fake launchQueue callback.
+  const launchPage = await context.newPage();
+  launchPage.on('pageerror', e => errors.push(e.message));
+  await launchPage.goto(origin);
+  await launchPage.evaluate(({ token, user }) => {
+    localStorage.setItem('sb-lkwnbvervvgbbvfosohi-auth-token', JSON.stringify({ access_token: token, refresh_token: 'test-refresh', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, token_type: 'bearer', user }));
+  }, { token, user });
+  await launchPage.reload();
+  await launchPage.getByRole('heading', { name: 'Hôm nay', exact: true }).waitFor();
+  appProtocol = await browser.newBrowserCDPSession();
+  await appProtocol.send('PWA.install', { manifestId: origin + '/', installUrlOrBundleUrl: origin + '/' });
+  installedManifest = origin + '/';
+  await appProtocol.send('PWA.changeAppUserSettings', { manifestId: installedManifest, linkCapturing: true, displayMode: 'standalone' });
+  const appWindow = context.waitForEvent('page');
+  await appProtocol.send('PWA.launch', { manifestId: installedManifest });
+  const appPage = await appWindow;
+  appPage.on('pageerror', e => errors.push(e.message));
+  await appPage.waitForFunction(() => window.fixtureLaunchCount > 0 && matchMedia('(display-mode: standalone)').matches);
+  const appTargetProtocol = await context.newCDPSession(appPage);
+  const appTarget = (await appTargetProtocol.send('Target.getTargetInfo')).targetInfo.targetId;
+  await appPage.locator('.snav [data-view=assets]').click();
+  await appPage.locator('[data-add=asset]').click();
+  await appPage.locator('#modal [name=name]').fill('Bản nháp khi mở ứng dụng nhiều lần');
+  const documentId = await appPage.evaluate(() => window.fixtureDocument = crypto.randomUUID());
+  const initialPages = context.pages().length;
+  for (const url of [origin + '/', origin + '/?install=1', origin + '/index.html', origin + '/?install=1']) {
+    const consumed = await appPage.evaluate(() => window.fixtureLaunchCount);
+    await appProtocol.send('PWA.launch', { manifestId: installedManifest, url });
+    await appPage.waitForFunction(count => window.fixtureLaunchCount > count, consumed);
+    assert.equal((await appTargetProtocol.send('Target.getTargetInfo')).targetInfo.targetId, appTarget);
+    assert.equal(await appPage.evaluate(() => window.fixtureDocument), documentId);
+    assert.equal(await appPage.locator('#modal [name=name]').inputValue(), 'Bản nháp khi mở ứng dụng nhiều lần');
+    assert.equal(context.pages().length, initialPages);
+  }
+  console.log('PASS repeated real Chromium PWA launches: same target, no reload, current view and unsaved form preserved');
+
+  // Navigation callbacks must retain their complete URL. Fulfill only the
+  // document with a sentinel so no fake code is exchanged with auth.
+  for (const suffix of ['/?code=launch-code&state=launch-state&install=1#callback', '/#access_token=launch-token&refresh_token=launch-refresh&type=recovery']) {
+    const target = new URL(origin + suffix); target.searchParams.delete('install');
+    callbackFixture = true;
+    await appProtocol.send('PWA.launch', { manifestId: installedManifest, url: origin + suffix });
+    await appPage.getByRole('heading', { name: 'Callback received' }).waitFor();
+    assert.equal(appPage.url(), target.href);
+    callbackFixture = false;
+    await appPage.goto(origin);
+    await appPage.getByRole('heading', { name: 'Hôm nay', exact: true }).waitFor();
+  }
+  await appProtocol.send('PWA.launch', { manifestId: installedManifest, url: origin + '/?shop=sample' });
+  await appPage.waitForURL(origin + '/?shop=sample');
+  await appPage.waitForFunction(() => !document.querySelector('link[rel="manifest"]'));
+  await appProtocol.send('PWA.launch', { manifestId: installedManifest });
+  await appPage.waitForURL(origin + '/');
+  await appPage.getByRole('heading', { name: 'Hôm nay', exact: true }).waitFor();
+  assert.deepEqual(errors, []);
+  console.log('PASS launch navigation: OAuth query/hash preserved, storefront opens and root launch returns to admin');
 } finally {
+  if (installedManifest) await appProtocol.send('PWA.uninstall', { manifestId: installedManifest });
   await context?.close();
   if (server) await new Promise(r => server.close(r));
   await rm(temporary, { recursive: true, force: true });

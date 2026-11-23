@@ -64,6 +64,34 @@ Hộp cài vẫn do trình duyệt kiểm soát: [tài liệu cài PWA](https://
 Khi triển khai tính năng này, phát hành Rentbook trước, sau đó Filezuno.
 Không cần chạy SQL hoặc cấu hình lại provider/bản quyền/SePay.
 
+## Mở nhiều lần dùng lại cửa sổ hiện có
+
+Manifest dùng `launch_handler.client_mode: focus-existing`. Khi PWA đã mở,
+Chrome/Edge có hỗ trợ sẽ đưa cửa sổ đó lên trước. Bấm lại **Mở ứng dụng**
+từ Filezuno (`?install=1`) hoặc mở lại từ Start không tải lại màn hình,
+không đóng biểu mẫu và không làm mất nội dung chưa lưu. Khi chưa có cửa
+sổ ứng dụng, trình duyệt mở một cửa sổ mới như trước.
+
+Consumer của `launchQueue` giữ nguyên thao tác khi chỉ mở root; vẫn chuyển
+tới callback đăng nhập/khôi phục mật khẩu và liên kết `?shop=...` với đầy
+đủ query/hash. Mở root khi đang xem storefront trở lại phần quản trị.
+Lượt launch đầu không chạy lại callback mà cửa sổ mới đã tiếp nhận.
+Chỉ tiếp nhận URL cùng origin; trình duyệt thiếu API vẫn dùng luồng cũ.
+
+Quy tắc áp dụng cho PWA đã cài trong cùng hồ sơ trình duyệt và liên kết
+được phép mở bằng ứng dụng. Không gom các tab web thông thường, hồ sơ hay
+trình duyệt khác, và không áp dụng cho launcher `.exe` dùng `--app`.
+Website không tự đóng các cửa sổ cũ đang có công việc chưa lưu.
+
+Sau phát hành, lưu công việc rồi chọn **Có phiên bản mới** nếu nút xuất
+hiện, đóng các cửa sổ Rentbook và mở lại. Trình duyệt cập nhật manifest
+đã cài theo lịch riêng; cập nhật JS/service worker không chứng minh metadata
+của PWA đã đổi ngay. Nếu còn mở nhiều cửa sổ, kiểm tra lại bằng bản PWA
+trong đúng hồ sơ sau khi trình duyệt nhận manifest mới. Không cần xóa dữ liệu.
+
+Nguồn: [launch handler](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Manifest/Reference/launch_handler),
+[navigation management](https://developer.chrome.com/docs/capabilities/pwa-navigation-management).
+
 ## Kết nối, dữ liệu và cập nhật
 
 - **Đây là ứng dụng online.** Cần mạng để tải dữ liệu và lưu thay đổi. Khi đang mở mà mất mạng, có thông báo; khởi động khi offline chỉ hiện trang hướng dẫn kết nối lại.
@@ -75,7 +103,7 @@ Không cần chạy SQL hoặc cấu hình lại provider/bản quyền/SePay.
 
 ## Cấu trúc mã
 
-- `public/manifest.json`: tên, URL khởi động, scope và chế độ `standalone`.
+- `public/manifest.json`: tên, URL khởi động, scope, `standalone` và ưu tiên cửa sổ đang mở.
 - `public/icons/`: PNG 192/512, icon maskable 512 và Apple touch icon 180; biểu tượng theo thương hiệu Rentbook.
 - `src/pwa.js`, `src/pwa.css`: nút cài/cập nhật và thông báo kết nối.
 - `src/pwa-worker.js`: điều hướng network-only, offline fallback tĩnh.
@@ -105,4 +133,13 @@ npm run test:pwa
 PYTHONDONTWRITEBYTECODE=1 python3 tests/deploy-sso.py
 ```
 
-Browser test build production riêng với public config giả lập; Chromium kiểm tra manifest/installability thật, worker waiting/update, giữ bản nháp, offline fallback, API không cache, callback, storefront công khai và SSO PKCE. Kiểm tra `?install=1` ở trang đăng nhập, event đến muộn, giữ query/hash và bỏ hướng dẫn khi giả lập standalone. Thao tác nút cài dùng event giả lập; test **không cài vào hệ điều hành hoặc chứng minh link capturing Windows**. Người dùng đã xác nhận PWA và bộ cài PC chạy được ngày 21/11/2026; nút mở/cài mới từ Filezuno vẫn cần kiểm tra trên PC sau phát hành. Không dùng dữ liệu hay project thật trong các kiểm tra tự động.
+Browser test build production riêng với public config giả lập; Chromium kiểm tra manifest/installability thật, worker waiting/update, giữ bản nháp, offline fallback, API không cache, callback, storefront công khai và SSO PKCE. Kiểm tra `?install=1` ở trang đăng nhập, event đến muộn, giữ query/hash và bỏ hướng dẫn khi giả lập standalone. Thao tác nút cài dùng event giả lập. Người dùng đã xác nhận PWA và bộ cài PC chạy được ngày 21/11/2026; nút mở/cài mới từ Filezuno vẫn cần kiểm tra trên PC sau phát hành. Không dùng dữ liệu hay project thật trong các kiểm tra tự động.
+
+Hồi quy mở nhiều lần cài riêng fixture localhost bằng CDP trong hồ sơ Chromium
+tạm, mở cửa sổ standalone thật rồi lặp launch vào root, `?install=1` và
+`/index.html`. Kiểm tra cùng target/document, không thêm cửa sổ, giữ view và
+bản nháp; callback query/hash và chuyển storefront/quản trị vẫn hoạt động.
+Gỡ fixture khi kết thúc. Đây là kiểm tra engine trên Linux, không thay thế
+kiểm tra PWA đã cài trong Chrome/Edge trên Windows của người dùng. Thử liên
+kết khác origin trong Chromium headless không kích hoạt capture; không coi
+kết quả launch qua CDP là bằng chứng link capturing Windows.

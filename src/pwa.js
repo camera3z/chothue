@@ -89,7 +89,41 @@ function notice(message, kind = 'status') {
   if (message && kind !== 'offline') noticeTimer = setTimeout(() => { el.hidden = true; }, 8000);
 }
 
+function handleAppLaunches() {
+  if (typeof window.launchQueue?.setConsumer !== 'function') return;
+  const normalize = value => {
+    const url = new URL(value);
+    if (url.searchParams.get('install') === '1') url.searchParams.delete('install');
+    return url;
+  };
+  const entry = normalize(location.href);
+  let firstLaunch = true;
+  window.launchQueue.setConsumer(({ targetURL } = {}) => {
+    let target;
+    try { target = normalize(targetURL); } catch { return; }
+    if (target.origin !== location.origin || target.username || target.password) return;
+    const initial = firstLaunch;
+    firstLaunch = false;
+    // A newly opened window already loaded its launch URL. In particular,
+    // don't process the first OAuth callback again after auth clears its URL.
+    if (initial && target.href === entry.href) return;
+    const current = normalize(location.href);
+    const openDashboard = ['/', '/index.html'].includes(target.pathname) && !target.search && !target.hash;
+    // The browser focuses this window. Keep its view and unsaved form when
+    // Filezuno or a desktop shortcut simply asks to open the admin app again.
+    if (target.href === current.href || (openDashboard && !current.searchParams.has('shop'))) return;
+    // focus-existing does not navigate automatically. Still deliver OAuth
+    // callbacks and storefront links, or return from a storefront to admin.
+    const hashOnly = target.pathname === current.pathname && target.search === current.search;
+    location.assign(target.href);
+    // A fragment-only callback otherwise stays in the same document and the
+    // auth client never gets its usual startup pass to consume the token.
+    if (hashOnly) location.reload();
+  });
+}
+
 export function startPWA() {
+  if (import.meta.env.PROD && window.isSecureContext) handleAppLaunches();
   if (new URLSearchParams(location.search).has('shop')) {
     // Customer storefronts are not an invitation to install the admin app.
     document.querySelector('link[rel="manifest"]')?.remove();
