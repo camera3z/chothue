@@ -622,13 +622,18 @@ input[type="radio"] {
 }
 
 /* calendar */
+.shell-calendar {
+  max-width: none;
+}
 .cal {
+  container-type: inline-size;
   overflow-x: auto;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--surface);
 }
 .cgrid {
+  --cw: max(72px, calc((100cqw - 220px) / 14));
   min-width: max-content;
 }
 .chead,
@@ -639,7 +644,7 @@ input[type="radio"] {
   position: sticky;
   left: 0;
   z-index: 3;
-  width: 150px;
+  width: 220px;
   flex: none;
   background: var(--surface);
   border-right: 1px solid var(--line);
@@ -705,6 +710,7 @@ input[type="radio"] {
   border-bottom: 0;
 }
 .ctrack {
+  width: calc(14 * var(--cw));
   position: relative;
   flex: none;
 }
