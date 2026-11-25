@@ -117,11 +117,11 @@ const nav = [
   ["assets", "▣", "Tài sản"],
   ["contracts", "▤", "Đơn thuê"],
   ["customers", "♙", "Khách thuê"],
-  ["calendar", "▦", "Lịch"],
-  ["payments", "↗", "Công nợ & tiền cọc"],
-  ["requests", "▤", "Yêu cầu đặt thuê"],
+  ["calendar", "▦", "Lịch thuê"],
+  ["payments", "↗", "Công nợ và tiền"],
+  ["requests", "▤", "Yêu cầu thuê"],
   ["storefront", "▣", "Trang trưng bày"],
-  ["license", "◇", "Gói và bản quyền"],
+  ["license", "◇", "Tài khoản"],
 ];
 const active = (c) => c.status === "active";
 const used = (id) =>
