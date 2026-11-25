@@ -622,19 +622,17 @@ input[type="radio"] {
 }
 
 /* calendar */
-.shell-calendar {
-  max-width: none;
-}
 .cal {
   container-type: inline-size;
-  overflow-x: auto;
+  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--surface);
 }
 .cgrid {
-  --cw: max(72px, calc((100cqw - 220px) / 14));
-  min-width: max-content;
+  --label-width: clamp(90px, 22cqw, 180px);
+  --cw: calc((100cqw - var(--label-width)) / 14);
+  width: 100%;
 }
 .chead,
 .crow {
@@ -644,7 +642,7 @@ input[type="radio"] {
   position: sticky;
   left: 0;
   z-index: 3;
-  width: 220px;
+  width: var(--label-width);
   flex: none;
   background: var(--surface);
   border-right: 1px solid var(--line);
@@ -664,7 +662,8 @@ input[type="radio"] {
 }
 .clabel b {
   font-weight: 500;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
   text-overflow: ellipsis;
   overflow: hidden;
 }
@@ -676,15 +675,15 @@ input[type="radio"] {
   width: var(--cw);
   flex: none;
   text-align: center;
-  font-size: 11px;
+  font-size: 9px;
   color: var(--muted);
-  padding: 5px 0;
+  padding: 8px 0;
   border-right: 1px solid var(--line);
   line-height: 1.25;
 }
 .cd b {
   display: block;
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink);
   font-weight: 500;
 }
@@ -1406,6 +1405,12 @@ th {
   min-height: 30px;
 }
 .cal-bar {
+  height: 40px;
+  padding: 4px;
+  font-size: 10px;
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
   background: var(--accent-soft);
   color: var(--accent);
 }
@@ -1418,7 +1423,14 @@ th {
   color: var(--idle);
 }
 .clabel b {
-  font-size: 12px;
+  font-size: 11px;
+}
+@media (max-width: 600px) {
+  .clabel { padding: 6px; }
+  .clabel small { font-size: 9px; }
+  .cd { font-size: 8px; }
+  .cd b { font-size: 9px; }
+  .cal-bar { font-size: 9px; padding: 3px 1px; }
 }
 .cal-range {
   color: var(--muted);
@@ -1942,9 +1954,9 @@ dialog.calendar-picker {
 }
 .calendar-weekdays span {
   text-align: center;
-  font-size: 11px;
+  font-size: 9px;
   color: var(--muted);
-  padding: 5px 0;
+  padding: 8px 0;
 }
 .calendar-days button {
   height: 32px;
