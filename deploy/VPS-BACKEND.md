@@ -4,6 +4,14 @@ Ngày 28/11/2026: có bản code/kiểm thử, **chưa đổi website production
 Mục tiêu đã chốt: chuyển toàn bộ tài khoản/quyền/dữ liệu, Rentbook làm app
 thử trước, sau đó áp dụng cùng tài khoản Filezuno cho web-app khác.
 
+Cập nhật cùng ngày: người dùng đã chọn **bắt đầu Rentbook với dữ liệu mới,
+giữ nguyên Supabase cũ**. Dùng helper của Hub
+`deploy/start-rentbook-vps.py --rentbook-checkout CHECKOUT --start-empty` từ
+staging đã pin. Helper sao lưu/thử phục hồi, bật API/Nginx, gọi deploy frontend
+bên dưới và cài backup đêm. Không cần URI hoặc quyền IPv4 trên Supabase.
+Tài khoản Filezuno hiện có giữ nguyên; dữ liệu và gói/key cũ không tự chuyển.
+Lần đăng nhập đầu tạo đơn vị trống; cơ chế bản quyền vẫn áp dụng như trước.
+
 Frontend có `VITE_FILEZUNO_BACKEND=vps`, dùng `src/vps-client.js` gọi API
 cùng origin `/api/rentbook/`. Đăng nhập qua `/_app-session/start`, cookie
 Filezuno host-only; đăng ký/đặt lại mật khẩu ở Filezuno. Không dùng token
