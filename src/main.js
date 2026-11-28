@@ -9,6 +9,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createVPSClient } from './vps-client.js';
 import { mountNativeMembers } from './native-members.js';
 const nativeBackend = import.meta.env.VITE_FILEZUNO_BACKEND === 'vps';
+const privateWorkspace = nativeBackend && import.meta.env.VITE_FILEZUNO_WORKSPACE_MODEL === 'personal';
 const filezunoSSO = nativeBackend || import.meta.env.VITE_FILEZUNO_SSO === "1";
 const configured = nativeBackend || Boolean(
   import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY,
@@ -126,7 +127,7 @@ const nav = [
   ["storefront", "▣", "Trang trưng bày"],
   ["license", "◇", "Tài khoản"],
 ];
-if (nativeBackend) nav.push(['members','♙','Thành viên']);
+if (nativeBackend && !privateWorkspace) nav.push(['members','♙','Thành viên']);
 let nativeWorkspaces = [], currentRole = 'owner';
 const active = (c) => c.status === "active";
 const used = (id) =>
@@ -629,7 +630,7 @@ function content() {
     }</div>`;
   if (view === "payments")
     return `<div class="kpis"><div class="kpi"><span>Tiền thuê còn phải thu</span><b class="money-kpi">${money(state.contracts.reduce((n, c) => n + Math.max(0, c.total - c.paid), 0))}</b></div><div class="kpi"><span>Đã thu (gồm cọc / trả trước)</span><b class="money-kpi">${money(state.contracts.reduce((n, c) => n + Number(c.paid), 0))}</b></div>${state.contracts.some((c) => held(c) > 0) ? `<div class="kpi"><span>Cọc bảo đảm cũ chưa hoàn</span><b class="money-kpi">${money(state.contracts.reduce((n, c) => n + held(c), 0))}</b></div>` : ""}</div><div class="list">${state.contracts.map((c) => `<div class="row"><span><span class="r-top"><b>${esc(c.agreedCustomerName || customerName(c.customerId))}</b><span class="code">${esc(c.code)}</span></span><span class="r-sub">Đã thu (gồm trả trước) ${money(c.paid)} / ${money(c.total)}</span>${held(c) > 0 ? `<span class="r-sub">Cọc bảo đảm cũ còn giữ ${money(held(c))}</span>` : ""}</span><span class="r-end"><span class="amt">${money(Math.max(0, c.total - c.paid))}</span><span class="row-actions">${held(c) > 0 ? `<button class="btn sm" data-refund="${c.id}">Hoàn cọc cũ</button>` : ""}${c.paid < c.total ? `<button class="btn sm pri" data-pay="${c.id}">Ghi nhận thu</button>` : '<span class="pill st-ready">Đã thanh toán</span>'}</span></span></div>`).join("") || '<div class="empty"><b>Chưa có đơn thuê</b>Công nợ sẽ hiển thị tại đây.</div>'}</div><p class="footnote">Tiền cọc ban đầu là khoản trả trước, được trừ vào tổng tiền thuê. Khoản cọc bảo đảm đã lưu từ phiên bản cũ vẫn giữ riêng để hoàn, không tự chuyển đổi.</p>`;
-  return `<section class="license-layout"><article class="panel"><span class="eyebrow">BẢN QUYỀN KHÔNG GIAN LÀM VIỆC</span><h2>${db ? "Kích hoạt để bắt đầu kinh doanh" : "Bạn đang khám phá bản demo"}</h2><p>Mỗi key kích hoạt cho một đơn vị cho thuê. Dữ liệu giữa các đơn vị được phân quyền riêng.</p><div class="license-state"><span class="badge">${db ? (license && new Date(license.expires_at) > new Date() ? "Đã kích hoạt" : "Chưa kích hoạt") : "Chế độ demo"}</span>${license ? `<p>Hạn sử dụng: ${esc(new Date(license.expires_at).toLocaleDateString("vi-VN"))}</p>` : ""}</div><p><a class="btn pri primary" href="https://filezuno.net/buy/rentbook" target="_blank" rel="noopener noreferrer">Mua key / Gia hạn trên Filezuno ↗</a></p><p>Key đã mua nằm trong mục Key của tôi trên Filezuno. Đăng nhập Rentbook bằng đúng tài khoản Filezuno trước khi kích hoạt.</p><form id="key-form"><label>Key bản quyền<input name="key" placeholder="Nhập key do nhà cung cấp cấp" required ${db ? "" : "disabled"}></label><button class="primary" ${db ? "" : "disabled"}>Kích hoạt key</button></form><p class="footnote">${db ? "Key chỉ được sử dụng một lần và xác thực trên máy chủ." : "Để dùng key thật, kết nối dự án Supabase riêng theo README."}</p></article><article class="panel tip"><h3>Dành cho nhiều mô hình cho thuê</h3><p>✓ Danh mục tài sản tự do</p><p>✓ Đơn giá theo giờ, ngày, tháng hoặc lượt</p><p>✓ Khách thuê và hợp đồng</p><p>✓ Tồn khả dụng và công nợ</p><p>✓ Không gian dữ liệu riêng</p></article></section>`;
+  return `<section class="license-layout"><article class="panel"><span class="eyebrow">${privateWorkspace ? "GÓI SỬ DỤNG CỦA BẠN" : "BẢN QUYỀN KHÔNG GIAN LÀM VIỆC"}</span><h2>${db ? "Kích hoạt để bắt đầu kinh doanh" : "Bạn đang khám phá bản demo"}</h2><p>${privateWorkspace ? "Mỗi tài khoản Filezuno có một không gian riêng. Gói sử dụng chỉ áp dụng cho tài khoản của bạn." : "Mỗi key kích hoạt cho một đơn vị cho thuê. Dữ liệu giữa các đơn vị được phân quyền riêng."}</p>${privateWorkspace ? `<p class="personal-account-email">Tài khoản: ${esc(session.user.email)}</p>` : ""}<div class="license-state"><span class="badge">${db ? (license && new Date(license.expires_at) > new Date() ? "Đã kích hoạt" : "Chưa kích hoạt") : "Chế độ demo"}</span>${license ? `<p>Hạn sử dụng: ${esc(new Date(license.expires_at).toLocaleDateString("vi-VN"))}</p>` : ""}</div><p><a class="btn pri primary" href="https://filezuno.net/buy/rentbook" target="_blank" rel="noopener noreferrer">Mua key / Gia hạn trên Filezuno ↗</a></p><p>Key đã mua nằm trong mục Key của tôi trên Filezuno. Đăng nhập Rentbook bằng đúng tài khoản Filezuno trước khi kích hoạt.</p><form id="key-form"><label>Key bản quyền<input name="key" placeholder="Nhập key do nhà cung cấp cấp" required ${db ? "" : "disabled"}></label><button class="primary" ${db ? "" : "disabled"}>Kích hoạt key</button></form><p class="footnote">${db ? "Key chỉ được sử dụng một lần và xác thực trên máy chủ." : "Để dùng key thật, kết nối dự án Supabase riêng theo README."}</p></article><article class="panel tip"><h3>Dành cho nhiều mô hình cho thuê</h3><p>✓ Danh mục tài sản tự do</p><p>✓ Đơn giá theo giờ, ngày, tháng hoặc lượt</p><p>✓ Khách thuê và hợp đồng</p><p>✓ Tồn khả dụng và công nợ</p><p>✓ Không gian dữ liệu riêng</p></article></section>`;
 }
 const iconPaths = {
   overview: '<path d="M4 13h6V4H4zM14 20h6V11h-6zM4 20h6v-4H4zM14 7h6V4h-6z"/>',
@@ -713,13 +714,14 @@ function render() {
     renderAuth();
     return;
   }
+  if (privateWorkspace && view==='members') view='overview';
   const title = nav.find((x) => x[0] === view)[2];
   document.querySelector("#app").innerHTML =
     `<div class="shell"><aside class="side"><div><a class="brand" href="#"><i></i>Rentbook</a><div class="wsname brand-description" style="max-width:none;margin-top:6px">Quản lý cho thuê đa ngành</div></div><nav class="snav" aria-label="Điều hướng">${navHTML()}</nav><div class="side-bottom">${pwaInstallButton(true)}<div class="sidebar-controls">${session ? '<button class="btn sm desktop-signout" data-signout>Đăng xuất</button>' : ""}<button class="theme-btn btn sm" data-theme-toggle>Đổi sáng / tối</button></div><small>${db ? "Dữ liệu đồng bộ trong không gian riêng của bạn." : "Bản demo. Dữ liệu lưu trong trình duyệt này."}</small></div></aside><div class="content-column"><div class="top"><div class="brand"><i></i>Rentbook</div><div class="wsname">${esc(shopName())}</div><button class="btn sm" data-theme-toggle aria-label="Đổi giao diện sáng tối">◐</button></div><main class="main">${accountHeader()}<div class="head page-title"><div><h1>${view === "overview" ? "Hôm nay" : title}</h1><p>${view === "overview" ? new Date().toLocaleDateString("vi-VN", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : view === "members" ? "Mời thành viên và cấp quyền cho từng công việc." : view === "calendar" ? "Theo dõi ngày giao và hẹn trả của từng đơn thuê." : view === "assets" ? `${state.assets.length} tài sản · Danh mục theo ngành kinh doanh` : view === "customers" ? `${state.customers.length} khách hàng` : "Theo dõi đầy đủ tài sản, tiền thuê và tiền cọc."}</p></div>${["overview", "assets", "customers", "contracts"].includes(view) ? `<button class="btn pri primary" data-add="${{ overview: "contract", assets: "asset", customers: "customer", contracts: "contract" }[view]}">＋ ${view === "assets" ? "Thêm tài sản" : view === "customers" ? "Thêm khách thuê" : "Tạo đơn thuê"}</button>` : ""}</div>${!db ? '<div class="demo-banner">Bản demo · Dữ liệu lưu trên trình duyệt này.</div>' : ""}${["assets", "customers", "contracts"].includes(view) ? `<div class="filters search-bar"><input id="search" class="search" type="search" placeholder="Tìm kiếm theo tên${view === "contracts" ? " hoặc mã đơn" : ""}…" value="${esc(search)}"></div>` : ""}<div id="content">${content()}</div><footer>Rentbook · Quản lý cho thuê đa ngành</footer></main></div></div><nav class="tabs" aria-label="Điều hướng di động">${navHTML()}</nav><dialog id="modal"></dialog><div id="toast" role="status"></div>`;
   bind();
   if (nativeBackend) {
     const header=document.querySelector('.account-header');
-    if(nativeWorkspaces.length>1&&header){
+    if(!privateWorkspace&&nativeWorkspaces.length>1&&header){
       const label=document.createElement('label');label.className='native-workspace-select';label.textContent='Đơn vị';
       const select=document.createElement('select');select.setAttribute('aria-label','Chọn đơn vị sử dụng');
       for(const workspace of nativeWorkspaces){const option=document.createElement('option');option.value=workspace.organization_id;option.textContent=workspace.name;option.selected=workspace.organization_id===org.id;select.append(option);}
@@ -731,7 +733,7 @@ function render() {
       document.querySelectorAll('[data-add],[data-photo],[data-maintenance],[data-edit-customer],[data-edit-reservation],[data-handover],[data-return],[data-pay],[data-refund],[data-review-request],[data-rentasset]').forEach(button=>button.disabled=true);
     }
     if(!['owner','admin'].includes(currentRole))document.querySelectorAll('.shop-name,#storefront-form input,#storefront-form button,#key-form input,#key-form button').forEach(control=>control.disabled=true);
-    if(view==='members')mountNativeMembers(db,org.id,currentRole,async()=>{await load();render();}).catch(error=>toast(error.message));
+    if(!privateWorkspace&&view==='members')mountNativeMembers(db,org.id,currentRole,async()=>{await load();render();}).catch(error=>toast(error.message));
   }
   syncPWAControls();
 }
@@ -1352,7 +1354,11 @@ async function load() {
   if(nativeBackend){
     const response=await db.workspaces();if(response.error)throw Error(response.error.message);
     nativeWorkspaces=response.data;
-    try{selected=sessionStorage.getItem('rentbook-workspace:'+session.user.id);}catch{}
+    if(privateWorkspace){
+      if(session.user.workspace_model!=='personal'||nativeWorkspaces.length!==1||nativeWorkspaces[0].role!=='owner')
+        throw Error('Không gian riêng chưa sẵn sàng. Vui lòng tải lại trang hoặc liên hệ quản trị.');
+      selected=nativeWorkspaces[0].organization_id;
+    }else try{selected=sessionStorage.getItem('rentbook-workspace:'+session.user.id);}catch{}
     if(!nativeWorkspaces.some(item=>item.organization_id===selected))selected=nativeWorkspaces[0]?.organization_id;
     currentRole=nativeWorkspaces.find(item=>item.organization_id===selected)?.role || 'owner';
   }

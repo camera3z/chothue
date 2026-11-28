@@ -309,48 +309,25 @@ def deploy(dist, root, backup, verify):
         raise
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--source', type=Path, default=Path('/opt/chothue'))
-    parser.add_argument('--install-node-if-missing', action='store_true', help='Tải Node 24 vào cache root riêng nếu thiếu Node/npm phù hợp.')
-    parser.add_argument('--backend-vps', action='store_true', help='Chỉ dùng sau cutover dữ liệu: build API VPS, kiểm tra health PostgreSQL qua HTTPS trước khi phát hành.')
-    args = parser.parse_args()
-    if os.geteuid() != 0:
-        raise DeployError('Chạy bằng root trên VPS.')
-    source = args.source.resolve()
-    checkout = Path(__file__).resolve().parents[1]
-    if checkout == source or not (checkout / 'src/main.js').is_file():
-        raise DeployError('Chạy từ checkout staging mới, không chạy trong /opt/chothue.')
-    if 'custom:filezuno' not in (checkout / 'src/main.js').read_text():
-        raise DeployError('Checkout chưa có đăng nhập Filezuno.')
-    settings = {'VITE_FILEZUNO_BACKEND':'vps','VITE_FILEZUNO_SSO':'1'} if args.backend_vps else build_settings(source / '.env.local')
-    if not shutil.which('nginx') or not shutil.which('curl'):
-        raise DeployError('Cần nginx và curl hiện có trên VPS. Chưa thay đổi website.')
-    config = subprocess.run(['nginx', '-T'], capture_output=True, text=True, check=True).stdout
-    root = detect_root(config)
-    if root == source or root == Path('/') or not (root / 'index.html').is_file() or not (root / 'assets').is_dir():
-        raise DeployError('Đích chưa phải thư mục bản build Vite đang chạy; không ghi đè.')
-    if (root / '.env.local').exists() or (root / 'package.json').exists():
-        raise DeployError('Thư mục Nginx chứa mã nguồn/cấu hình; cần kiểm tra riêng.')
-    if any(path.is_symlink() for path in root.rglob('*')):
-        raise DeployError('Bản web hiện tại có symlink bên trong; cần kiểm tra riêng trước khi thay đổi.')
-    env, npm = find_node(source, args.install_node_if_missing)
+def release_settings(source, backend_vps=False, personal=False):
+    if personal:
+        return {'VITE_FILEZUNO_BACKEND':'vps','VITE_FILEZUNO_SSO':'1','VITE_FILEZUNO_WORKSPACE_MODEL':'personal'}
+    return {'VITE_FILEZUNO_BACKEND':'vps','VITE_FILEZUNO_SSO':'1'} if backend_vps else build_settings(source / '.env.local')
 
-    def fetch(url):
-        return subprocess.check_output(['curl', '--fail', '--silent', '--show-error', '--connect-timeout', '5', '--max-time', '20',
-            '--resolve', f'{DOMAIN}:443:127.0.0.1', f'https://{DOMAIN}{url}'], stderr=subprocess.PIPE)
 
-    print('Đang kiểm tra bản đang chạy qua HTTPS nội bộ...', flush=True)
-    check_served(root, fetch)
-    if args.backend_vps:
-        try:
-            health=json.loads(fetch('/api/rentbook/health'))
-            if health != {'backend':'vps','schema_version':1}: raise ValueError()
-        except (ValueError,subprocess.SubprocessError):
-            raise DeployError('API VPS chưa sẵn sàng qua đúng Nginx HTTPS. Chưa phát hành frontend hoặc đổi dữ liệu.') from None
-    print('Thư mục web đã xác minh:', root, flush=True)
+def check_backend(fetch, personal=False):
+    expected={'backend':'vps','schema_version':2,'workspace_model':'personal'} if personal else {'backend':'vps','schema_version':1}
+    try:
+        if json.loads(fetch('/api/rentbook/health')) != expected: raise ValueError()
+    except (ValueError,subprocess.SubprocessError):
+        raise DeployError('API VPS chưa sẵn sàng với đúng mô hình không gian. Chưa phát hành frontend.') from None
+
+
+def build_release(source, checkout, backend_vps=False, personal=False, install_node_if_missing=False, stage_root=Path('/root')):
+    settings=release_settings(source,backend_vps,personal)
+    env,npm=find_node(source,install_node_if_missing)
     # Build in a private directory, leaving both installed source and .env.local intact.
-    stage = Path(tempfile.mkdtemp(prefix='rentbook-sso-release-', dir='/root'))
+    stage = Path(tempfile.mkdtemp(prefix='rentbook-sso-release-', dir=stage_root))
     build = stage / 'build'
     shutil.copytree(checkout, build, ignore=shutil.ignore_patterns('.git', 'node_modules', 'dist', '.env', '.env.*', 'test-results', '__pycache__'))
     env_file = build / '.env.local'
@@ -369,6 +346,45 @@ def main():
     if not js or not any(contains_sso(p) for p in js):
         raise DeployError('Bản build chưa chứa nút đăng nhập Filezuno; không phát hành.')
     check_served(dist, lambda url: (dist / ('index.html' if url == '/' else url.lstrip('/'))).read_bytes())
+    return stage,dist
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--source', type=Path, default=Path('/opt/chothue'))
+    parser.add_argument('--install-node-if-missing', action='store_true', help='Tải Node 24 vào cache root riêng nếu thiếu Node/npm phù hợp.')
+    parser.add_argument('--backend-vps', action='store_true', help='Chỉ dùng sau cutover dữ liệu: build API VPS, kiểm tra health PostgreSQL qua HTTPS trước khi phát hành.')
+    parser.add_argument('--backend-private', action='store_true', help='Một tài khoản/một không gian riêng, chỉ phát hành khi API schema2 đã sẵn sàng.')
+    args = parser.parse_args()
+    if os.geteuid() != 0:
+        raise DeployError('Chạy bằng root trên VPS.')
+    source = args.source.resolve()
+    checkout = Path(__file__).resolve().parents[1]
+    if checkout == source or not (checkout / 'src/main.js').is_file():
+        raise DeployError('Chạy từ checkout staging mới, không chạy trong /opt/chothue.')
+    if 'custom:filezuno' not in (checkout / 'src/main.js').read_text():
+        raise DeployError('Checkout chưa có đăng nhập Filezuno.')
+    if not shutil.which('nginx') or not shutil.which('curl'):
+        raise DeployError('Cần nginx và curl hiện có trên VPS. Chưa thay đổi website.')
+    config = subprocess.run(['nginx', '-T'], capture_output=True, text=True, check=True).stdout
+    root = detect_root(config)
+    if root == source or root == Path('/') or not (root / 'index.html').is_file() or not (root / 'assets').is_dir():
+        raise DeployError('Đích chưa phải thư mục bản build Vite đang chạy; không ghi đè.')
+    if (root / '.env.local').exists() or (root / 'package.json').exists():
+        raise DeployError('Thư mục Nginx chứa mã nguồn/cấu hình; cần kiểm tra riêng.')
+    if any(path.is_symlink() for path in root.rglob('*')):
+        raise DeployError('Bản web hiện tại có symlink bên trong; cần kiểm tra riêng trước khi thay đổi.')
+
+    def fetch(url):
+        return subprocess.check_output(['curl', '--fail', '--silent', '--show-error', '--connect-timeout', '5', '--max-time', '20',
+            '--resolve', f'{DOMAIN}:443:127.0.0.1', f'https://{DOMAIN}{url}'], stderr=subprocess.PIPE)
+
+    print('Đang kiểm tra bản đang chạy qua HTTPS nội bộ...', flush=True)
+    check_served(root, fetch)
+    if args.backend_vps or args.backend_private:
+        check_backend(fetch,args.backend_private)
+    print('Thư mục web đã xác minh:', root, flush=True)
+    stage,dist=build_release(source,checkout,args.backend_vps,args.backend_private,args.install_node_if_missing)
     backup = stage / 'previous-web'
     print('Đang sao lưu và phát hành giao diện...', flush=True)
     try:
@@ -378,7 +394,7 @@ def main():
         raise
     print('THÀNH CÔNG: Rentbook đã cập nhật; index, JS/CSS và tài nguyên PWA được xác minh qua Nginx HTTPS.')
     print('Bản sao giao diện cũ:', backup)
-    print('Frontend dùng API VPS và tài khoản Filezuno. Dữ liệu PostgreSQL cần được chuyển/xác minh trước bước này.' if args.backend_vps else 'Không thay source /opt/chothue, .env.local, Nginx, dữ liệu hoặc license Supabase.')
+    print('Frontend dùng API VPS và tài khoản Filezuno. Dữ liệu PostgreSQL cần được chuyển/xác minh trước bước này.' if args.backend_vps or args.backend_private else 'Không thay source /opt/chothue, .env.local, Nginx, dữ liệu hoặc license Supabase.')
     print(f'Mở https://{DOMAIN} bằng Chrome hoặc Edge trên PC, chọn Cài Rentbook hoặc biểu tượng cài ứng dụng trên thanh địa chỉ.')
 
 

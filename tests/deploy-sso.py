@@ -29,6 +29,15 @@ def pwa(root):
 
 
 class DeployTests(unittest.TestCase):
+    def test_private_release_has_no_supabase_settings_and_requires_private_health(self):
+        settings=d.release_settings(Path('/unused'),personal=True)
+        self.assertEqual(settings,{'VITE_FILEZUNO_BACKEND':'vps','VITE_FILEZUNO_SSO':'1','VITE_FILEZUNO_WORKSPACE_MODEL':'personal'})
+        private=lambda url:json.dumps({'backend':'vps','schema_version':2,'workspace_model':'personal'}).encode()
+        legacy=lambda url:json.dumps({'backend':'vps','schema_version':1}).encode()
+        d.check_backend(private,personal=True)
+        with self.assertRaises(d.DeployError):d.check_backend(legacy,personal=True)
+        with self.assertRaises(d.DeployError):d.check_backend(private,personal=False)
+
     def test_pwa_health_checks_manifest_worker_and_all_icons_through_server(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);pwa(root);requested=[]

@@ -2057,3 +2057,5 @@ dialog.calendar-picker {
 [data-native-invite]{max-width:460px}
 [data-native-invite] label{display:block;margin:12px 0}
 @media(max-width:600px){.native-workspace-select{flex-basis:100%;flex-wrap:wrap}.native-workspace-select select{max-width:100%}.native-member{align-items:stretch}.native-member strong{flex-basis:100%}.native-member select{flex:1}}
+
+.personal-account-email { overflow-wrap: anywhere; }

@@ -1,6 +1,21 @@
 # Rentbook dùng tài khoản Filezuno và PostgreSQL VPS
 
 Ngày 28/11/2026: có bản code/kiểm thử, **chưa đổi website production**.
+
+Yêu cầu mới nhất: **mỗi tài khoản Filezuno có đúng một không gian riêng**.
+Frontend personal dùng `VITE_FILEZUNO_WORKSPACE_MODEL=personal`; bỏ Thành viên
+và chọn đơn vị, không mở workspace được người khác thêm vào. Schema2 ở Hub
+kiểm tra owner/RLS1:1 phía máy chủ, tự chuẩn bị không gian khi đăng nhập.
+Đây là bản sửa mô hình trước đó; không chỉ ẩn nút quản lý thành viên.
+
+Website đã phát hành native schema1 theo terminal người dùng, cần chuyển bằng
+`HUB/deploy/enable-rentbook-private-spaces.py --rentbook-checkout RENTBOOK
+--split-test-licenses` từ hai checkout đã pin. Cờ test dựa xác nhận chưa bán.
+Helper build trước, sao lưu/thử restore, báo chủ dữ liệu, gate503, chuyển
+owner/schema2 và kiểm tra API rồi mới mở. Không dùng helper khởi tạo trống.
+Phát hành frontend về sau dùng `--backend-private`, yêu cầu đúng health
+`{backend:vps,schema_version:2,workspace_model:personal}`. `--backend-vps`
+còn để hỗ trợ schema1 trước chuyển; không dùng để rollback mô hình personal.
 Mục tiêu đã chốt: chuyển toàn bộ tài khoản/quyền/dữ liệu, Rentbook làm app
 thử trước, sau đó áp dụng cùng tài khoản Filezuno cho web-app khác.
 
