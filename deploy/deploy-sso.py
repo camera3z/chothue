@@ -313,6 +313,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, default=Path('/opt/chothue'))
     parser.add_argument('--install-node-if-missing', action='store_true', help='Tải Node 24 vào cache root riêng nếu thiếu Node/npm phù hợp.')
+    parser.add_argument('--backend-vps', action='store_true', help='Chỉ dùng sau cutover dữ liệu: build API VPS, kiểm tra health PostgreSQL qua HTTPS trước khi phát hành.')
     args = parser.parse_args()
     if os.geteuid() != 0:
         raise DeployError('Chạy bằng root trên VPS.')
@@ -322,7 +323,7 @@ def main():
         raise DeployError('Chạy từ checkout staging mới, không chạy trong /opt/chothue.')
     if 'custom:filezuno' not in (checkout / 'src/main.js').read_text():
         raise DeployError('Checkout chưa có đăng nhập Filezuno.')
-    settings = build_settings(source / '.env.local')
+    settings = {'VITE_FILEZUNO_BACKEND':'vps','VITE_FILEZUNO_SSO':'1'} if args.backend_vps else build_settings(source / '.env.local')
     if not shutil.which('nginx') or not shutil.which('curl'):
         raise DeployError('Cần nginx và curl hiện có trên VPS. Chưa thay đổi website.')
     config = subprocess.run(['nginx', '-T'], capture_output=True, text=True, check=True).stdout
@@ -341,6 +342,12 @@ def main():
 
     print('Đang kiểm tra bản đang chạy qua HTTPS nội bộ...', flush=True)
     check_served(root, fetch)
+    if args.backend_vps:
+        try:
+            health=json.loads(fetch('/api/rentbook/health'))
+            if health != {'backend':'vps','schema_version':1}: raise ValueError()
+        except (ValueError,subprocess.SubprocessError):
+            raise DeployError('API VPS chưa sẵn sàng qua đúng Nginx HTTPS. Chưa phát hành frontend hoặc đổi dữ liệu.') from None
     print('Thư mục web đã xác minh:', root, flush=True)
     # Build in a private directory, leaving both installed source and .env.local intact.
     stage = Path(tempfile.mkdtemp(prefix='rentbook-sso-release-', dir='/root'))
@@ -371,7 +378,7 @@ def main():
         raise
     print('THÀNH CÔNG: Rentbook đã cập nhật; index, JS/CSS và tài nguyên PWA được xác minh qua Nginx HTTPS.')
     print('Bản sao giao diện cũ:', backup)
-    print('Không thay source /opt/chothue, .env.local, Nginx, dữ liệu hoặc license Supabase.')
+    print('Frontend dùng API VPS và tài khoản Filezuno. Dữ liệu PostgreSQL cần được chuyển/xác minh trước bước này.' if args.backend_vps else 'Không thay source /opt/chothue, .env.local, Nginx, dữ liệu hoặc license Supabase.')
     print(f'Mở https://{DOMAIN} bằng Chrome hoặc Edge trên PC, chọn Cài Rentbook hoặc biểu tượng cài ứng dụng trên thanh địa chỉ.')
 
 

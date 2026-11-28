@@ -6,11 +6,14 @@ import { rentalQuote, rentalPeriods } from "./rental-pricing.js";
 import { localInput } from "./booking-request.js";
 import { renderStorefront } from "./storefront.js";
 import { createClient } from "@supabase/supabase-js";
-const filezunoSSO = import.meta.env.VITE_FILEZUNO_SSO === "1";
-const configured = Boolean(
+import { createVPSClient } from './vps-client.js';
+import { mountNativeMembers } from './native-members.js';
+const nativeBackend = import.meta.env.VITE_FILEZUNO_BACKEND === 'vps';
+const filezunoSSO = nativeBackend || import.meta.env.VITE_FILEZUNO_SSO === "1";
+const configured = nativeBackend || Boolean(
   import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY,
 );
-const db = configured
+const db = nativeBackend ? createVPSClient({ onError(message) { const root=document.querySelector('#app');if(root.querySelector('.shell'))toast(message);else root.textContent=message+' Vui lòng tải lại trang để kết nối lại.'; } }) : configured
   ? createClient(
       import.meta.env.VITE_SUPABASE_URL,
       import.meta.env.VITE_SUPABASE_ANON_KEY,
@@ -123,6 +126,8 @@ const nav = [
   ["storefront", "▣", "Trang trưng bày"],
   ["license", "◇", "Tài khoản"],
 ];
+if (nativeBackend) nav.push(['members','♙','Thành viên']);
+let nativeWorkspaces = [], currentRole = 'owner';
 const active = (c) => c.status === "active";
 const used = (id) =>
   state.contracts
@@ -242,7 +247,7 @@ async function uploadPhoto(file, assetId) {
     .upload(path, file, { contentType: file.type, upsert: false });
   if (error)
     throw Error(
-      "Không tải được ảnh. Kiểm tra bucket asset-images, quyền truy cập và key còn hạn. " +
+      (nativeBackend ? "Không tải được ảnh. " : "Không tải được ảnh. Kiểm tra bucket asset-images, quyền truy cập và key còn hạn. ") +
         error.message,
     );
   return { imagePath: path };
@@ -547,6 +552,7 @@ function editReservation(id) {
 }
 
 function content() {
+  if (view === 'members' && nativeBackend) return '<section class="card" data-native-members role="region" aria-label="Thành viên đơn vị"><p>Đang tải thành viên…</p></section>';
   if (view === "requests")
     return db
       ? requestList()
@@ -650,6 +656,7 @@ function navHTML() {
     .join("");
 }
 const shopName = () =>
+  (nativeBackend ? org?.name : null) ||
   session?.user?.user_metadata?.shop_name ||
   org?.name ||
   state?.shopName ||
@@ -666,6 +673,11 @@ function openShopName() {
       if (!name || name.length > 120)
         throw Error("Nhập tên shop từ 1 đến 120 ký tự.");
       if (db) {
+        if (nativeBackend) {
+          const result=await db.renameWorkspace(org.id,name);
+          if(result.error)throw Error(result.error.message);
+          org.name=name; await load(); render(); return;
+        }
         const { data, error } = await db.auth.updateUser({
           data: { shop_name: name },
         });
@@ -703,8 +715,24 @@ function render() {
   }
   const title = nav.find((x) => x[0] === view)[2];
   document.querySelector("#app").innerHTML =
-    `<div class="shell"><aside class="side"><div><a class="brand" href="#"><i></i>Rentbook</a><div class="wsname brand-description" style="max-width:none;margin-top:6px">Quản lý cho thuê đa ngành</div></div><nav class="snav" aria-label="Điều hướng">${navHTML()}</nav><div class="side-bottom">${pwaInstallButton(true)}<div class="sidebar-controls">${session ? '<button class="btn sm desktop-signout" data-signout>Đăng xuất</button>' : ""}<button class="theme-btn btn sm" data-theme-toggle>Đổi sáng / tối</button></div><small>${db ? "Dữ liệu đồng bộ trong không gian riêng của bạn." : "Bản demo. Dữ liệu lưu trong trình duyệt này."}</small></div></aside><div class="content-column"><div class="top"><div class="brand"><i></i>Rentbook</div><div class="wsname">${esc(shopName())}</div><button class="btn sm" data-theme-toggle aria-label="Đổi giao diện sáng tối">◐</button></div><main class="main">${accountHeader()}<div class="head page-title"><div><h1>${view === "overview" ? "Hôm nay" : title}</h1><p>${view === "overview" ? new Date().toLocaleDateString("vi-VN", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : view === "calendar" ? "Theo dõi ngày giao và hẹn trả của từng đơn thuê." : view === "assets" ? `${state.assets.length} tài sản · Danh mục theo ngành kinh doanh` : view === "customers" ? `${state.customers.length} khách hàng` : "Theo dõi đầy đủ tài sản, tiền thuê và tiền cọc."}</p></div>${["overview", "assets", "customers", "contracts"].includes(view) ? `<button class="btn pri primary" data-add="${{ overview: "contract", assets: "asset", customers: "customer", contracts: "contract" }[view]}">＋ ${view === "assets" ? "Thêm tài sản" : view === "customers" ? "Thêm khách thuê" : "Tạo đơn thuê"}</button>` : ""}</div>${!db ? '<div class="demo-banner">Bản demo · Dữ liệu lưu trên trình duyệt này.</div>' : ""}${["assets", "customers", "contracts"].includes(view) ? `<div class="filters search-bar"><input id="search" class="search" type="search" placeholder="Tìm kiếm theo tên${view === "contracts" ? " hoặc mã đơn" : ""}…" value="${esc(search)}"></div>` : ""}<div id="content">${content()}</div><footer>Rentbook · Quản lý cho thuê đa ngành</footer></main></div></div><nav class="tabs" aria-label="Điều hướng di động">${navHTML()}</nav><dialog id="modal"></dialog><div id="toast" role="status"></div>`;
+    `<div class="shell"><aside class="side"><div><a class="brand" href="#"><i></i>Rentbook</a><div class="wsname brand-description" style="max-width:none;margin-top:6px">Quản lý cho thuê đa ngành</div></div><nav class="snav" aria-label="Điều hướng">${navHTML()}</nav><div class="side-bottom">${pwaInstallButton(true)}<div class="sidebar-controls">${session ? '<button class="btn sm desktop-signout" data-signout>Đăng xuất</button>' : ""}<button class="theme-btn btn sm" data-theme-toggle>Đổi sáng / tối</button></div><small>${db ? "Dữ liệu đồng bộ trong không gian riêng của bạn." : "Bản demo. Dữ liệu lưu trong trình duyệt này."}</small></div></aside><div class="content-column"><div class="top"><div class="brand"><i></i>Rentbook</div><div class="wsname">${esc(shopName())}</div><button class="btn sm" data-theme-toggle aria-label="Đổi giao diện sáng tối">◐</button></div><main class="main">${accountHeader()}<div class="head page-title"><div><h1>${view === "overview" ? "Hôm nay" : title}</h1><p>${view === "overview" ? new Date().toLocaleDateString("vi-VN", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : view === "members" ? "Mời thành viên và cấp quyền cho từng công việc." : view === "calendar" ? "Theo dõi ngày giao và hẹn trả của từng đơn thuê." : view === "assets" ? `${state.assets.length} tài sản · Danh mục theo ngành kinh doanh` : view === "customers" ? `${state.customers.length} khách hàng` : "Theo dõi đầy đủ tài sản, tiền thuê và tiền cọc."}</p></div>${["overview", "assets", "customers", "contracts"].includes(view) ? `<button class="btn pri primary" data-add="${{ overview: "contract", assets: "asset", customers: "customer", contracts: "contract" }[view]}">＋ ${view === "assets" ? "Thêm tài sản" : view === "customers" ? "Thêm khách thuê" : "Tạo đơn thuê"}</button>` : ""}</div>${!db ? '<div class="demo-banner">Bản demo · Dữ liệu lưu trên trình duyệt này.</div>' : ""}${["assets", "customers", "contracts"].includes(view) ? `<div class="filters search-bar"><input id="search" class="search" type="search" placeholder="Tìm kiếm theo tên${view === "contracts" ? " hoặc mã đơn" : ""}…" value="${esc(search)}"></div>` : ""}<div id="content">${content()}</div><footer>Rentbook · Quản lý cho thuê đa ngành</footer></main></div></div><nav class="tabs" aria-label="Điều hướng di động">${navHTML()}</nav><dialog id="modal"></dialog><div id="toast" role="status"></div>`;
   bind();
+  if (nativeBackend) {
+    const header=document.querySelector('.account-header');
+    if(nativeWorkspaces.length>1&&header){
+      const label=document.createElement('label');label.className='native-workspace-select';label.textContent='Đơn vị';
+      const select=document.createElement('select');select.setAttribute('aria-label','Chọn đơn vị sử dụng');
+      for(const workspace of nativeWorkspaces){const option=document.createElement('option');option.value=workspace.organization_id;option.textContent=workspace.name;option.selected=workspace.organization_id===org.id;select.append(option);}
+      select.onchange=async()=>{select.disabled=true;try{sessionStorage.setItem('rentbook-workspace:'+session.user.id,select.value);}catch{}requestRefreshSequence++;imageURLs.clear();try{await load();render();}catch(error){toast(error.message);select.disabled=false;}};
+      label.append(select);header.prepend(label);
+    }
+    if(currentRole==='viewer'){
+      const hint=document.createElement('p');hint.className='footnote';hint.textContent='Bạn có quyền chỉ xem tại đơn vị này.';document.querySelector('.page-title').after(hint);
+      document.querySelectorAll('[data-add],[data-photo],[data-maintenance],[data-edit-customer],[data-edit-reservation],[data-handover],[data-return],[data-pay],[data-refund],[data-review-request],[data-rentasset]').forEach(button=>button.disabled=true);
+    }
+    if(!['owner','admin'].includes(currentRole))document.querySelectorAll('.shop-name,#storefront-form input,#storefront-form button,#key-form input,#key-form button').forEach(control=>control.disabled=true);
+    if(view==='members')mountNativeMembers(db,org.id,currentRole,async()=>{await load();render();}).catch(error=>toast(error.message));
+  }
   syncPWAControls();
 }
 function bind() {
@@ -1238,11 +1266,11 @@ function openDetail(id) {
 }
 function renderAuth() {
   document.querySelector("#app").innerHTML =
-    `<div class="auth-page-header"><a class="brand" href="#"><i></i>Rentbook</a>${accountHeader()}</div><div class="auth"><div class="auth-story"><div class="brand"><i></i>Rentbook</div><span class="eyebrow">HỆ ĐIỀU HÀNH CHO THUÊ ĐA NGÀNH</span><h2>Tài sản luôn luân chuyển.<br>Vận hành luôn trong tầm tay.</h2><p>Từ lần bàn giao đầu tiên đến lần nhận trả cuối cùng.</p><div class="auth-flow"><span>01 / QUẢN LÝ KHO</span><span>02 / GIAO & NHẬN TRẢ</span><span>03 / TIỀN THUÊ & TIỀN CỌC</span></div></div><section class="panel"><span class="eyebrow">KHÔNG GIAN KINH DOANH CỦA BẠN</span><h1>Đăng nhập bàn điều hành.</h1><p>Không gian riêng cho đơn vị kinh doanh cho thuê của bạn.</p>${filezunoSSO ? '<button type="button" class="primary" id="filezunoSignIn">Đăng nhập bằng Filezuno</button><p>Dùng tài khoản Filezuno để truy cập Rentbook.</p><p id="filezunoSignInStatus" role="status"></p>' : ""}<form id="auth-form">${input("Email", "email", "email")}${input("Mật khẩu", "password", "password", 'minlength="8"')}<p id="auth-message" role="status"></p><button class="primary" name="action" value="signin">Đăng nhập</button><button name="action" value="signup">Tạo tài khoản</button></form></section></div>`;
+    `<div class="auth-page-header"><a class="brand" href="#"><i></i>Rentbook</a>${accountHeader()}</div><div class="auth"><div class="auth-story"><div class="brand"><i></i>Rentbook</div><span class="eyebrow">HỆ ĐIỀU HÀNH CHO THUÊ ĐA NGÀNH</span><h2>Tài sản luôn luân chuyển.<br>Vận hành luôn trong tầm tay.</h2><p>Từ lần bàn giao đầu tiên đến lần nhận trả cuối cùng.</p><div class="auth-flow"><span>01 / QUẢN LÝ KHO</span><span>02 / GIAO & NHẬN TRẢ</span><span>03 / TIỀN THUÊ & TIỀN CỌC</span></div></div><section class="panel"><span class="eyebrow">KHÔNG GIAN KINH DOANH CỦA BẠN</span><h1>Đăng nhập bàn điều hành.</h1><p>Không gian riêng cho đơn vị kinh doanh cho thuê của bạn.</p>${filezunoSSO ? '<button type="button" class="primary" id="filezunoSignIn">Đăng nhập bằng Filezuno</button><p>Dùng tài khoản Filezuno để truy cập Rentbook.</p><p id="filezunoSignInStatus" role="status"></p>' : ""}${nativeBackend ? '<p><a href="https://filezuno.net/#auth" target="_blank" rel="noopener">Tạo tài khoản Filezuno</a> · <a href="https://filezuno.net/#forgot" target="_blank" rel="noopener">Quên mật khẩu</a></p>' : `<form id="auth-form">${input("Email", "email", "email")}${input("Mật khẩu", "password", "password", 'minlength="8"')}<p id="auth-message" role="status"></p><button class="primary" name="action" value="signin">Đăng nhập</button><button name="action" value="signup">Tạo tài khoản</button></form>`}</section></div>`;
   syncPWAControls();
   document.querySelector("[data-login]")?.addEventListener("click", (e) => {
     e.preventDefault();
-    document.querySelector("#auth-form [name=email]").focus();
+    document.querySelector(nativeBackend ? "#filezunoSignIn" : "#auth-form [name=email]").focus();
   });
   document.querySelector("#filezunoSignIn")?.addEventListener("click", async (event) => {
     const button = event.currentTarget;
@@ -1258,7 +1286,8 @@ function renderAuth() {
       button.disabled = false;
     }
   });
-  document.querySelector("form").onsubmit = async (e) => {
+  const authForm = document.querySelector("#auth-form");
+  if (authForm) authForm.onsubmit = async (e) => {
     e.preventDefault();
     const d = Object.fromEntries(new FormData(e.target));
     const action = e.submitter.value;
@@ -1319,7 +1348,15 @@ async function pollAdminRequests() {
   }
 }
 async function load() {
-  const { data: members, error } = await db
+  let selected;
+  if(nativeBackend){
+    const response=await db.workspaces();if(response.error)throw Error(response.error.message);
+    nativeWorkspaces=response.data;
+    try{selected=sessionStorage.getItem('rentbook-workspace:'+session.user.id);}catch{}
+    if(!nativeWorkspaces.some(item=>item.organization_id===selected))selected=nativeWorkspaces[0]?.organization_id;
+    currentRole=nativeWorkspaces.find(item=>item.organization_id===selected)?.role || 'owner';
+  }
+  const { data: members, error } = nativeBackend ? {data:nativeWorkspaces.filter(item=>item.organization_id===selected),error:null} : await db
     .from("members")
     .select("organization_id")
     .eq("user_id", session.user.id)

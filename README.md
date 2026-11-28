@@ -1,6 +1,11 @@
 # Rentbook — Quản lý cho thuê đa ngành
 
-Ứng dụng độc lập, không dùng dữ liệu hoặc cấu hình của QRMenu. Quản lý tài sản theo danh mục tự đặt, khách thuê, hợp đồng, nhận trả và thu tiền. Một tài khoản đại diện một đơn vị; một key dùng một lần để kích hoạt hoặc gia hạn đơn vị đó.
+Đang chuẩn bị chuyển tài khoản/quyền/dữ liệu sang Filezuno + PostgreSQL trên VPS.
+Mode mới được bật riêng sau khi đối chiếu và chuyển dữ liệu, hướng dẫn tại
+[deploy/VPS-BACKEND.md](deploy/VPS-BACKEND.md). Website đang chạy chưa tự chuyển
+chỉ bởi cập nhật source; mode demo/legacy vẫn giữ cách cấu hình hiện tại.
+
+Ứng dụng độc lập, không dùng dữ liệu hoặc cấu hình của QRMenu. Quản lý tài sản theo danh mục tự đặt, khách thuê, hợp đồng, nhận trả và thu tiền. Mỗi đơn vị có dữ liệu riêng; một key dùng một lần để kích hoạt hoặc gia hạn đơn vị đó.
 
 Rentbook có bản **PWA cài trên PC bằng Chrome/Edge**, mở cửa sổ riêng và dùng dữ liệu/tài khoản hiện có. Cần kết nối mạng để làm việc. Hướng dẫn cài, phát hành và kiểm tra tại **[deploy/PWA.md](deploy/PWA.md)**.
 
